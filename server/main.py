@@ -1,8 +1,27 @@
 import socket
+import json
 from ipaddress import IPv4Interface
 import netifaces
 from enum import Enum, unique
 from threading import Thread
+
+class OpCode(str, Enum):
+    SERVER_HELLO = "server_hello"
+    
+class Message():
+    def __init__(self, opcode: OpCode, data: bytes):
+        self.opcode = opcode
+        self.data = data
+
+    def marshal(self):
+        return json.dumps(self.__dict__)
+
+    @staticmethod
+    def unmarshal(data_b: bytes) -> "Message":
+        data_str = data_b.decode("UTF-8")
+        payload = json.loads(data_str)
+        print(payload)
+        return Message(OpCode(payload.get("opcode")), payload.get("data"))
 
 def is_valid(address: str, broadcast: str | None):
     if not broadcast:
