@@ -2,19 +2,20 @@ import socket
 import json
 from ipaddress import IPv4Interface
 import netifaces
+import time
 from enum import Enum, unique
 from threading import Thread
 
 class OpCode(str, Enum):
     SERVER_HELLO = "server_hello"
-    
+
 class Message():
-    def __init__(self, opcode: OpCode, data: bytes):
+    def __init__(self, opcode: OpCode, data: bytes | None = None):
         self.opcode = opcode
         self.data = data
 
     def marshal(self):
-        return json.dumps(self.__dict__)
+        return bytes(json.dumps(self.__dict__), "UTF-8")
 
     @staticmethod
     def unmarshal(data_b: bytes) -> "Message":
@@ -22,6 +23,36 @@ class Message():
         payload = json.loads(data_str)
         print(payload)
         return Message(OpCode(payload.get("opcode")), payload.get("data"))
+
+    def broadcast(self, timeout=0) -> tuple["Message", str, str]:
+        return send(self.marshal(), timeout=timeout)
+
+def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0) -> tuple[Message, str, str] | None:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    if address is None:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        address = (BROADCAST_IP, BROADCAST_PORT)
+
+    sock.sendto(payload, address)
+
+    response = None
+    start = time.time()
+    sock.settimeout(timeout)
+    while time.time() - start < timeout:
+        try:
+            data, (ip, port) = sock.recvfrom(1024)
+        except TimeoutError:
+            break
+
+        if data:
+            msg = Message(command=None, data=data)
+            response = msg, ip, port
+            break
+
+    sock.close()
+    return response
+    
 
 def is_valid(address: str, broadcast: str | None):
     if not broadcast:
@@ -75,6 +106,8 @@ def main():
     listener_thread = Thread(target=register_listener, args=(callback,))
     listener_thread.start()
     threads.append(listener_thread)
+
+    Message(OpCode.SERVER_HELLO).broadcast()
 
     for thread in threads:
         thread.join()
