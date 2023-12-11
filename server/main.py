@@ -1,3 +1,4 @@
+import argparse
 import socket
 import json
 from ipaddress import IPv4Interface
@@ -41,9 +42,10 @@ class OpCode(str, Enum):
     HELLO_REPLY = "hello_reply"
     
 class Message():
-    def __init__(self, opcode: OpCode, data: bytes | None = None):
+    def __init__(self, opcode: OpCode, data: bytes | None = None, port: int | None = None):
         self.opcode: OpCode = opcode
         self.data: bytes = data
+        self.port: int = port
 
     def marshal(self):
         return bytes(json.dumps(self.__dict__), "UTF-8")
@@ -53,10 +55,13 @@ class Message():
         data_str = data_b.decode("UTF-8")
         payload = json.loads(data_str)
         print(payload)
-        return Message(OpCode(payload.get("opcode")), payload.get("data"))
+        return Message(OpCode(payload.get("opcode")), payload.get("data"), payload.get("port"))
 
     def broadcast(self, timeout=0) -> tuple["Message", str, str]:
         return send(self.marshal(), timeout=timeout)
+
+    def send(self, ip: str, port: int, timeout=0) -> tuple["Message", str, str]:
+        return send(self.marshal(), (ip, port), timeout=timeout)
 
 
 def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0):
@@ -95,7 +100,6 @@ INTERFACE = get_network_interface()
 
 BROADCAST_PORT = 34567
 BROADCAST_IP = str(INTERFACE.network.broadcast_address)
-
 cp = ControlPlane()
 
 def register_listener(callback):
@@ -114,20 +118,48 @@ def register_listener(callback):
         listen_socket.close()
         exit(0)
 
+def uni_listener(callback, lport: int):
+    listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    listen_socket.bind((INTERFACE.ip.compressed, lport))
+
+    try: 
+        while True:
+            data, (ip, port) = listen_socket.recvfrom(1024)
+            if data:
+                msg = Message.unmarshal(data)
+                callback(msg, ip, port)
+    except KeyboardInterrupt:
+        listen_socket.close()
+        exit(0)
 
 def hello_handler(message: Message, ip: str, port: int):
     cp.register_node(Node(ip, port))
-    # Send back list of nodes    
+    Message(opcode=OpCode.HELLO_REPLY, data=list(map(lambda node: node.__dict__, cp.nodes))).send(ip, message.port)
 
-def broadcast_handler(message: Message, ip: str, port: int):
+def hello_reply_handler(message: Message, ip: str, port: int):
+    print("Received node state")
+    print(message)
+        
+def message_handler(message: Message, ip: str, port: int):
     print(f"Broadcast message received: {message} from {ip}:{port}", flush=True)
     if message.opcode is OpCode.HELLO:
         hello_handler(message, ip, port)        
+    elif message.opcode is OpCode.HELLO_REPLY:
+        hello_reply_handler(message, ip, port)
     else:
         return
     print(cp.nodes)
        
 def main():
+    parser = argparse.ArgumentParser(
+        prog='Server'
+    )
+
+    parser.add_argument("--port", default=8765, type=int) 
+
+    args = parser.parse_args()
+    print(INTERFACE.ip.compressed)
+    print(BROADCAST_IP)
     # cp = ControlPlane()
     # cp.register_node(Node(ip="127.0.0.1", port=80))
     # for node in cp.nodes:
@@ -135,11 +167,15 @@ def main():
     
     threads = []
     
-    listener_thread = Thread(target=register_listener, args=(broadcast_handler,))
+    listener_thread = Thread(target=register_listener, args=(message_handler,))
     listener_thread.start()
     threads.append(listener_thread)
 
-    Message(OpCode.HELLO).broadcast()
+    uni_thread = Thread(target=uni_listener, args=(message_handler, args.port))
+    uni_thread.start()
+    threads.append(uni_thread)
+
+    Message(OpCode.HELLO, port=args.port).broadcast()
 
     for thread in threads:
         thread.join()
