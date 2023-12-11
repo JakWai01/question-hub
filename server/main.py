@@ -18,10 +18,21 @@ class Node:
 
 class ControlPlane:
     def __init__(self):
-        self.nodes: Set[Node] = set()
+        self._nodes: Set[Node] = set()
 
+    @property
+    def nodes(self):
+        return self._nodes
+    
+    @nodes.setter
+    def register_node_state(self, nodes: Set[Node]):
+        self._nodes = nodes
+        
     def register_node(self, node: Node):
-        self.nodes.add(node)
+        self._nodes.add(node)
+
+    def remove_node(self, node: Node):
+        self._nodes.remove(node)
 
 
 class OpCode(str, Enum):
