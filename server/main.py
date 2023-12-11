@@ -5,10 +5,29 @@ import netifaces
 import time
 from enum import Enum, unique
 from threading import Thread
+from typing import Set
+from dataclasses import dataclass
+
+@dataclass
+class Node:
+    ip: str
+    port: int
+
+    def __hash__(cls):
+        return hash(cls.ip) + cls.port
+
+class ControlPlane:
+    def __init__(self):
+        self.nodes: Set[Node] = set()
+
+    def register_node(self, node: Node):
+        self.nodes.add(node)
+
 
 class OpCode(str, Enum):
-    SERVER_HELLO = "server_hello"
-
+    HELLO = "hello"
+    HELLO_REPLY = "hello_reply"
+    
 class Message():
     def __init__(self, opcode: OpCode, data: bytes | None = None):
         self.opcode = opcode
@@ -26,6 +45,7 @@ class Message():
 
     def broadcast(self, timeout=0) -> tuple["Message", str, str]:
         return send(self.marshal(), timeout=timeout)
+
 
 def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -79,18 +99,23 @@ def register_listener(callback):
     except KeyboardInterrupt:
         listen_socket.close()
         exit(0)
-
+        
 def callback(message, ip, port):
-    print(f"Broadcast message received: {message}") 
+    print(f"Broadcast message received: {message} from {ip}:{port}", flush=True) 
        
 def main():
+    cr = ControlPlane()
+    cr.register_node(Node(ip="127.0.0.1", port=80))
+    for node in cr.nodes:
+        print(node)
+    
     threads = []
     
     listener_thread = Thread(target=register_listener, args=(callback,))
     listener_thread.start()
     threads.append(listener_thread)
 
-    Message(OpCode.SERVER_HELLO).broadcast()
+    Message(OpCode.HELLO).broadcast()
 
     for thread in threads:
         thread.join()
