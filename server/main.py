@@ -27,7 +27,7 @@ class Message():
     def broadcast(self, timeout=0) -> tuple["Message", str, str]:
         return send(self.marshal(), timeout=timeout)
 
-def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0) -> tuple[Message, str, str] | None:
+def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     if address is None:
@@ -35,24 +35,7 @@ def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0) -> t
         address = (BROADCAST_IP, BROADCAST_PORT)
 
     sock.sendto(payload, address)
-
-    response = None
-    start = time.time()
-    sock.settimeout(timeout)
-    while time.time() - start < timeout:
-        try:
-            data, (ip, port) = sock.recvfrom(1024)
-        except TimeoutError:
-            break
-
-        if data:
-            msg = Message(command=None, data=data)
-            response = msg, ip, port
-            break
-
-    sock.close()
-    return response
-    
+   
 
 def is_valid(address: str, broadcast: str | None):
     if not broadcast:
