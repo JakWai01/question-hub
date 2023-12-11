@@ -16,6 +16,7 @@ class Node:
     def __hash__(cls):
         return hash(cls.ip) + cls.port
 
+    
 class ControlPlane:
     def __init__(self):
         self._nodes: Set[Node] = set()
@@ -41,8 +42,8 @@ class OpCode(str, Enum):
     
 class Message():
     def __init__(self, opcode: OpCode, data: bytes | None = None):
-        self.opcode = opcode
-        self.data = data
+        self.opcode: OpCode = opcode
+        self.data: bytes = data
 
     def marshal(self):
         return bytes(json.dumps(self.__dict__), "UTF-8")
@@ -95,6 +96,8 @@ INTERFACE = get_network_interface()
 BROADCAST_PORT = 34567
 BROADCAST_IP = str(INTERFACE.network.broadcast_address)
 
+cp = ControlPlane()
+
 def register_listener(callback):
     listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -105,24 +108,34 @@ def register_listener(callback):
         while True:
             data, (ip, port) = listen_socket.recvfrom(1024)
             if data:
-                message = data.decode("utf-8")
-                callback(message, ip, port)
+                msg = Message.unmarshal(data)
+                callback(msg, ip, port)
     except KeyboardInterrupt:
         listen_socket.close()
         exit(0)
-        
-def callback(message, ip, port):
-    print(f"Broadcast message received: {message} from {ip}:{port}", flush=True) 
+
+
+def hello_handler(message: Message, ip: str, port: int):
+    cp.register_node(Node(ip, port))
+    # Send back list of nodes    
+
+def broadcast_handler(message: Message, ip: str, port: int):
+    print(f"Broadcast message received: {message} from {ip}:{port}", flush=True)
+    if message.opcode is OpCode.HELLO:
+        hello_handler(message, ip, port)        
+    else:
+        return
+    print(cp.nodes)
        
 def main():
-    cr = ControlPlane()
-    cr.register_node(Node(ip="127.0.0.1", port=80))
-    for node in cr.nodes:
-        print(node)
+    # cp = ControlPlane()
+    # cp.register_node(Node(ip="127.0.0.1", port=80))
+    # for node in cp.nodes:
+    #     print(node)
     
     threads = []
     
-    listener_thread = Thread(target=register_listener, args=(callback,))
+    listener_thread = Thread(target=register_listener, args=(broadcast_handler,))
     listener_thread.start()
     threads.append(listener_thread)
 
