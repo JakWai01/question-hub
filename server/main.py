@@ -21,10 +21,14 @@ class Node:
 class ControlPlane:
     def __init__(self):
         self._nodes: Set[Node] = set()
+        self._node_heartbeats = {}
 
     @property
     def nodes(self):
         return self._nodes
+
+    def register_heartbeat(self, socket: str):
+        self._node_heartbeats[socket] = int(time.time())
     
     @nodes.setter
     def register_node_state(self, nodes: Set[Node]):
@@ -36,10 +40,19 @@ class ControlPlane:
     def remove_node(self, node: Node):
         self._nodes.remove(node)
 
+    def get_node_from_socket(self, socket: str):
+        ip, port = socket.split(':')
+        for node in cp.nodes:
+            if node.ip == ip and node.port == int(port):
+                return node
+            else:
+                continue
+
 
 class OpCode(str, Enum):
     HELLO = "hello"
     HELLO_REPLY = "hello_reply"
+    HEARTBEAT = "heartbeat"
     
 class Message():
     def __init__(self, opcode: OpCode, data: bytes | None = None, port: int | None = None):
@@ -63,10 +76,9 @@ class Message():
     def send(self, ip: str, port: int, timeout=0) -> tuple["Message", str, str]:
         return send(self.marshal(), (ip, port), timeout=timeout)
 
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
     if address is None:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         address = (BROADCAST_IP, BROADCAST_PORT)
@@ -102,7 +114,7 @@ BROADCAST_PORT = 34567
 BROADCAST_IP = str(INTERFACE.network.broadcast_address)
 cp = ControlPlane()
 
-def register_listener(callback):
+def broadcast_target(callback):
     listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -118,7 +130,7 @@ def register_listener(callback):
         listen_socket.close()
         exit(0)
 
-def uni_listener(callback, lport: int):
+def unicast_target(callback, lport: int):
     listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listen_socket.bind((INTERFACE.ip.compressed, lport))
 
@@ -132,6 +144,22 @@ def uni_listener(callback, lport: int):
         listen_socket.close()
         exit(0)
 
+def heartbeat_target(callback, delay: int):
+    try:
+        while True:
+            new_hb_dict = cp._node_heartbeats.copy()
+            for socket, hb in cp._node_heartbeats.items():
+                if hb + 2 < int(time.time()):
+                    new_hb_dict.pop(socket)
+                    cp.remove_node(cp.get_node_from_socket(socket))
+            cp._node_heartbeats = new_hb_dict
+            Message(opcode=OpCode.HEARTBEAT).broadcast()
+            time.sleep(delay)
+            
+    except KeyboardInterrupt:
+        exit(0)
+
+
 def hello_handler(message: Message, ip: str, port: int):
     cp.register_node(Node(ip, port))
     Message(opcode=OpCode.HELLO_REPLY, data=list(map(lambda node: node.__dict__, cp.nodes))).send(ip, message.port)
@@ -139,6 +167,11 @@ def hello_handler(message: Message, ip: str, port: int):
 def hello_reply_handler(message: Message, ip: str, port: int):
     print("Received node state")
     print(message)
+
+def heartbeat_handler(message: Message, ip: str, port: int):
+    print(f"Received heartbeat from {ip}:{port}")
+    cp.register_heartbeat(f"{ip}:{port}")
+    print(cp._node_heartbeats)
         
 def message_handler(message: Message, ip: str, port: int):
     print(f"Broadcast message received: {message} from {ip}:{port}", flush=True)
@@ -146,6 +179,8 @@ def message_handler(message: Message, ip: str, port: int):
         hello_handler(message, ip, port)        
     elif message.opcode is OpCode.HELLO_REPLY:
         hello_reply_handler(message, ip, port)
+    elif message.opcode is OpCode.HEARTBEAT:
+        heartbeat_handler(message, ip, port)
     else:
         return
     print(cp.nodes)
@@ -155,7 +190,8 @@ def main():
         prog='Server'
     )
 
-    parser.add_argument("--port", default=8765, type=int) 
+    parser.add_argument("--port", default=8765, type=int)
+    parser.add_argument("--delay", default=1, type=int)
 
     args = parser.parse_args()
     print(INTERFACE.ip.compressed)
@@ -167,14 +203,18 @@ def main():
     
     threads = []
     
-    listener_thread = Thread(target=register_listener, args=(message_handler,))
+    listener_thread = Thread(target=broadcast_target, args=(message_handler,))
     listener_thread.start()
     threads.append(listener_thread)
 
-    uni_thread = Thread(target=uni_listener, args=(message_handler, args.port))
+    uni_thread = Thread(target=unicast_target, args=(message_handler, args.port))
     uni_thread.start()
     threads.append(uni_thread)
 
+    heartbeat_thread = Thread(target=heartbeat_target, args=(message_handler, args.delay))
+    heartbeat_thread.start()
+    threads.append(heartbeat_thread)
+    
     Message(OpCode.HELLO, port=args.port).broadcast()
 
     for thread in threads:
