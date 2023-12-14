@@ -13,7 +13,13 @@ from dataclasses import dataclass
 class Node:
     ip: str
     port: int
+    leader: bool
 
+    def __init__(cls, ip: str, port: int, leader: bool | None = False):
+        cls.ip = ip
+        cls.port = port
+        cls.leader = leader
+        
     def __hash__(cls):
         return hash(cls.ip) + cls.port
 
@@ -48,11 +54,18 @@ class ControlPlane:
             else:
                 continue
 
+    def get_leader(self) -> Node | None:
+        for node in cp.nodes:
+            if node.leader is True:
+                return node
+            else:
+                continue
 
 class OpCode(str, Enum):
     HELLO = "hello"
     HELLO_REPLY = "hello_reply"
     HEARTBEAT = "heartbeat"
+    ELECTION = "election"
     
 class Message():
     def __init__(self, opcode: OpCode, data: bytes | None = None, port: int | None = None):
@@ -150,8 +163,11 @@ def heartbeat_target(callback, delay: int):
             new_hb_dict = cp._node_heartbeats.copy()
             for socket, hb in cp._node_heartbeats.items():
                 if hb + 2 < int(time.time()):
+                    node = cp.get_node_from_socket(socket)
                     new_hb_dict.pop(socket)
-                    cp.remove_node(cp.get_node_from_socket(socket))
+                    cp.remove_node(socket)
+                    if node.leader is True:
+                        Message(opcode=OpCode.ELECTION).broadcast()
             cp._node_heartbeats = new_hb_dict
             Message(opcode=OpCode.HEARTBEAT).broadcast()
             time.sleep(delay)
@@ -172,6 +188,9 @@ def heartbeat_handler(message: Message, ip: str, port: int):
     print(f"Received heartbeat from {ip}:{port}")
     cp.register_heartbeat(f"{ip}:{port}")
     print(cp._node_heartbeats)
+
+def election_handler(message: Message, ip: str, port: int):
+    print(f"Received election from {ip}:{port}")
         
 def message_handler(message: Message, ip: str, port: int):
     print(f"Broadcast message received: {message} from {ip}:{port}", flush=True)
@@ -181,6 +200,8 @@ def message_handler(message: Message, ip: str, port: int):
         hello_reply_handler(message, ip, port)
     elif message.opcode is OpCode.HEARTBEAT:
         heartbeat_handler(message, ip, port)
+    elif message.opcode is OpCode.ELECTION:
+        election_handler(message, ip, port)
     else:
         return
     print(cp.nodes)
@@ -196,11 +217,7 @@ def main():
     args = parser.parse_args()
     print(INTERFACE.ip.compressed)
     print(BROADCAST_IP)
-    # cp = ControlPlane()
-    # cp.register_node(Node(ip="127.0.0.1", port=80))
-    # for node in cp.nodes:
-    #     print(node)
-    
+   
     threads = []
     
     listener_thread = Thread(target=broadcast_target, args=(message_handler,))
