@@ -61,6 +61,9 @@ class ControlPlane:
             else:
                 continue
 
+    def get_nodes_sorted(self) -> list[Node]:
+        return sorted(list(self._node_heartbeats))
+
 class OpCode(str, Enum):
     HELLO = "hello"
     HELLO_REPLY = "hello_reply"
