@@ -100,7 +100,6 @@ def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0):
         address = (BROADCAST_IP, BROADCAST_PORT)
 
     sock.sendto(payload, address)
-   
 
 def is_valid(address: str, broadcast: str | None):
     if not broadcast:
