@@ -38,12 +38,12 @@ These instances communicate with other nodes using sockets.
 This communication includes handling events triggered by the client instances and managing the server instances.
 Each server instance contains a database that stores the current application state.
 
-% \begin{figure}
-%     \centering
-%     \includegraphics[width=0.7\linewidth]{architecture_model.drawio.png}
-%     \caption{System Design Architecture Diagram}
-%     \label{fig:enter-label}
-% \end{figure}
+\begin{figure}
+    \centering
+    \includegraphics[width=0.7\linewidth]{architecture_model.drawio.png}
+    \caption{System Design Architecture Diagram}
+    \label{fig:enter-label}
+\end{figure}
  
 \section{Dynamic Discovery}
 
@@ -98,12 +98,13 @@ If a sender receives its own message again i.e. it had the largest processor or 
 \section{Ordered Reliable Multicast}
 
 In order to ensure that the number of votes of a certain question is represented correctly,
-the leader handles incoming vote requests using the First In, First Out method for achieving ordered reliable multicast when sending the messages to the rest of the system.
+the leader handles incoming vote requests using the First In, First Out method for achieving ordered reliable multicast when sending the messages to the rest of the system.\cite{dommel2000orderedmulticast}
 This ensures that all nodes resemble the same state and no nodes are out of sync as long as no node failures occured.
 
 
 \begin{thebibliography}{8}
 \bibitem{lamport2019byzantine}Lamport, L., Shostak, R. \& Pease, M. The Byzantine generals problem. {\em Concurrency: The Works Of Leslie Lamport}. pp. 203-226 (2019)
 \bibitem{hirschberg1980decentralized}Hirschberg, D. \& Sinclair, J. Decentralized extrema-finding in circular configurations of processors. {\em Communications Of The ACM}. \textbf{23}, 627-628 (1980)
+\bibitem{dommel2000orderedmulticast}Dommel, H.-P. and Garcia-Luna-Aceves, J.J. Ordered end-to-end multicast for distributed multimedia systems {\em Proceedings of the 33rd Annual Hawaii International Conference on System Sciences} pp. 10 (2000)
 \end{thebibliography}
 \end{document}
