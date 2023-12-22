@@ -6,7 +6,6 @@ import netifaces
 import time
 from enum import Enum, unique
 from threading import Thread
-from typing import Set
 from dataclasses import dataclass
 
 @dataclass
@@ -21,12 +20,12 @@ class Node:
         cls.leader = leader
         
     def __hash__(cls):
-        return hash(cls.ip) + cls.port
-
+        return hash(f"{cls.ip}:{cls.port}") 
+       
     
 class ControlPlane:
     def __init__(self):
-        self._nodes: Set[Node] = set()
+        self._nodes: set[Node] = set()
         self._node_heartbeats = {}
 
     @property
@@ -37,7 +36,7 @@ class ControlPlane:
         self._node_heartbeats[socket] = int(time.time())
     
     @nodes.setter
-    def register_node_state(self, nodes: Set[Node]):
+    def register_node_state(self, nodes: set[Node]):
         self._nodes = nodes
         
     def register_node(self, node: Node):
@@ -46,7 +45,7 @@ class ControlPlane:
     def remove_node(self, node: Node):
         self._nodes.remove(node)
 
-    def get_node_from_socket(self, socket: str):
+    def get_node_from_socket(self, socket: str) -> Node | None:
         ip, port = socket.split(':')
         for node in cp.nodes:
             if node.ip == ip and node.port == int(port):
@@ -167,8 +166,8 @@ def heartbeat_target(callback, delay: int):
             for socket, hb in cp._node_heartbeats.items():
                 if hb + 2 < int(time.time()):
                     node = cp.get_node_from_socket(socket)
+                    cp.remove_node(node)
                     new_hb_dict.pop(socket)
-                    cp.remove_node(socket)
                     if node.leader is True:
                         Message(opcode=OpCode.ELECTION).broadcast()
             cp._node_heartbeats = new_hb_dict
@@ -235,7 +234,7 @@ def main():
     heartbeat_thread.start()
     threads.append(heartbeat_thread)
     
-    Message(OpCode.HELLO, port=args.port).broadcast()
+    Message(OpCode.HELLO, port=args.port).broadcast(2)
 
     for thread in threads:
         thread.join()
