@@ -161,3 +161,7 @@ cython_debug/
 
 #Vs Code config
 .vscode/*
+
+#proposal
+proposal/proposal.aux
+proposal/proposal.log
