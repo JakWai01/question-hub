@@ -13,11 +13,13 @@ class Node:
     ip: str
     port: int
     leader: bool
-
-    def __init__(cls, ip: str, port: int, leader: bool | None = False):
+    server: bool
+    
+    def __init__(cls, ip: str, port: int, leader: bool | None = False, server: bool | None = False):
         cls.ip = ip
         cls.port = port
         cls.leader = leader
+        cls.server = server
         
     def __hash__(cls):
         return hash(f"{cls.ip}:{cls.port}") 
@@ -177,8 +179,8 @@ def heartbeat_target(callback, delay: int):
         exit(0)
 
 
-def hello_handler(message: Message, ip: str, port: int):
-    cp.register_node(Node(ip, port))
+def hello_handler(message: Message, ip: str, port: int, leader: bool | None = False, server: bool | None = False):
+    cp.register_node(Node(ip, port, leader, server))
     Message(opcode=OpCode.HELLO_REPLY, data=list(map(lambda node: node.__dict__, cp.nodes))).send(ip, message.port)
 
 def hello_reply_handler(message: Message, ip: str, port: int):
