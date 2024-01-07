@@ -15,7 +15,7 @@ class Node:
     leader: bool
     server: bool
 
-    def __init__(cls, ip: str, port: int, leader: bool, server: bool | None = False):
+    def __init__(cls, ip: str, port: int, leader: bool | None = False, server: bool | None = False):
         cls.ip = ip
         cls.port = port
         cls.leader = leader
@@ -25,10 +25,12 @@ class Node:
         return hash(f"{cls.ip}:{cls.port}") 
 
 class OpCode(str, Enum):
-    HELLO = "hello"
+    HELLO_SERVER = "hello_server"
+    HELLO_CLIENT = "hello_client"
     HELLO_REPLY = "hello_reply"
     HEARTBEAT = "heartbeat"
     ELECTION = "election"
+    TRANSPORT = "transport"
     
 class Message():
     def __init__(self, opcode: OpCode, data: bytes | None = None, port: int | None = None):
@@ -87,22 +89,6 @@ INTERFACE = get_network_interface()
 BROADCAST_PORT = 34567
 BROADCAST_IP = str(INTERFACE.network.broadcast_address)
 
-def broadcast_target(callback):
-    listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    listen_socket.bind(('', BROADCAST_PORT))
-
-    try:
-        while True:
-            data, (ip, port) = listen_socket.recvfrom(1024)
-            if data:
-                msg = Message.unmarshal(data)
-                callback(msg, ip, port)
-    except KeyboardInterrupt:
-        listen_socket.close()
-        exit(0)
-
 def unicast_target(callback, lport: int):
     listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listen_socket.bind((INTERFACE.ip.compressed, lport))
@@ -117,14 +103,33 @@ def unicast_target(callback, lport: int):
         listen_socket.close()
         exit(0)
 
+def data_request(ip: str, port: int):
+    print("getting nodes...")
+    print("Sent data request to ip:port")
+    Message(opcode=OpCode.TRANSPORT, data="give data plx").send(ip, 8765)
+
 def hello_reply_handler(message: Message, ip: str, port: int):
-    print("Received node state")
+    print(f"Received HELLO_REPLY from {ip}:{port}")
+    print(f"Received HELLO_REPLY from {ip}:{message.port}")
+    for node in message.data:
+        print(node["ip"],":",node["port"])
+    data_request(ip, 8765)
+    #print(f"Sent TRANSPORT to {ip}:8765")
+    #Message(opcode=OpCode.TRANSPORT, port=message.port, data="give data plx").send(ip, 8765)
+
+def data_receive_handler(message: Message, ip: str, port: int):
+    print(message.data)
+    print(f"Receive data {message.data} from {ip}:{port}")
+    print(f"Receive data {message.data} from {ip}:{message.port}")
     print(message)
         
+
 def message_handler(message: Message, ip: str, port: int):
     print(f"Broadcast message received: {message} from {ip}:{port}", flush=True)
     if message.opcode is OpCode.HELLO_REPLY:
         hello_reply_handler(message, ip, port)
+    elif message.opcode is OpCode.TRANSPORT:
+        data_receive_handler(message, ip, port)
     else:
         return
        
@@ -134,23 +139,19 @@ def main():
     )
 
     parser.add_argument("--port", default=8888, type=int)
-    parser.add_argument("--delay", default=1, type=int)
+    parser.add_argument("--delay", default=10, type=int)
 
     args = parser.parse_args()
     print(INTERFACE.ip.compressed)
     print(BROADCAST_IP)
    
     threads = []
-    
-    # listener_thread = Thread(target=broadcast_target, args=(message_handler,))
-    # listener_thread.start()
-    # threads.append(listener_thread)
 
     uni_thread = Thread(target=unicast_target, args=(message_handler, args.port))
     uni_thread.start()
     threads.append(uni_thread)
     
-    Message(OpCode.HELLO, port=args.port).broadcast(2)
+    Message(OpCode.HELLO_CLIENT, port=args.port).broadcast(2)
 
     for thread in threads:
         thread.join()
@@ -160,13 +161,3 @@ if __name__ == '__main__':
         main()
     except KeyboardInterrupt:
         exit(0)
-
-# HOST = "host.containers.internal"  # The server's hostname or IP address
-# PORT = 8000 # The port used by the server
-
-# with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-#     s.connect((HOST, PORT))
-#     s.sendall(b"Hello, world")
-#     data = s.recv(1024)
-#
-# print(f"Received {data!r}", flush=True)

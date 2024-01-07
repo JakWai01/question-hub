@@ -65,12 +65,17 @@ class ControlPlane:
     def get_nodes_sorted(self) -> list[Node]:
         return sorted(list(self._node_heartbeats))
 
+
 class OpCode(str, Enum):
-    HELLO = "hello"
+    HELLO_SERVER = "hello_server"
+    HELLO_CLIENT = "hello_client"
     HELLO_REPLY = "hello_reply"
     HEARTBEAT = "heartbeat"
     ELECTION = "election"
-    
+    TRANSPORT = "transport"
+
+
+
 class Message():
     def __init__(self, opcode: OpCode, data: bytes | None = None, port: int | None = None):
         self.opcode: OpCode = opcode
@@ -93,7 +98,9 @@ class Message():
     def send(self, ip: str, port: int, timeout=0) -> tuple["Message", str, str]:
         return send(self.marshal(), (ip, port), timeout=timeout)
 
+
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
 
 def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0):
     if address is None:
@@ -101,6 +108,7 @@ def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0):
         address = (BROADCAST_IP, BROADCAST_PORT)
 
     sock.sendto(payload, address)
+
 
 def is_valid(address: str, broadcast: str | None):
     if not broadcast:
@@ -178,33 +186,52 @@ def heartbeat_target(callback, delay: int):
     except KeyboardInterrupt:
         exit(0)
 
+def client_hello_handler(message: Message, ip: str, port: int, leader: bool | None = False, server: bool | None = False):
+    print(f"Received HELLO from {ip}:{port}")
+    print(f"Received HELLO from {ip}:{message.port}")
+    cp.register_node(Node(ip, message.port))
+    print(f"Sent HELLO_REPLY to {ip}:{message.port}")
+    Message(opcode=OpCode.HELLO_REPLY, data=list(map(lambda node: node.__dict__, cp.nodes))).send(ip, message.port)
 
 def hello_handler(message: Message, ip: str, port: int, leader: bool | None = False, server: bool | None = False):
-    cp.register_node(Node(ip, port, leader, server))
+    print(f"Received HELLO from {ip}:{port}")
+    print(f"Received HELLO from {ip}:{message.port}")
+    cp.register_node(Node(ip, port, leader, True))
+    print(f"Sent HELLO_REPLY to {ip}:{message.port}")
     Message(opcode=OpCode.HELLO_REPLY, data=list(map(lambda node: node.__dict__, cp.nodes))).send(ip, message.port)
+
+def transport_handler(message: Message, ip: str, port: int, leader: bool | None = False, server: bool | None = False):
+    print(f"Receive data {message.data} from {ip}:{port}")
+    print(f"Receive data {message.data} from {ip}:{message.port}")
+    print(message)
+    Message(opcode=OpCode.TRANSPORT, data="this is the data").send(ip, 8888)
 
 def hello_reply_handler(message: Message, ip: str, port: int):
     print("Received node state")
     print(message)
 
 def heartbeat_handler(message: Message, ip: str, port: int):
-    print(f"Received heartbeat from {ip}:{port}")
+    #print(f"Received heartbeat from {ip}:{port}")
     cp.register_heartbeat(f"{ip}:{port}")
-    print(cp._node_heartbeats)
+    #print(cp._node_heartbeats)
 
 def election_handler(message: Message, ip: str, port: int):
     print(f"Received election from {ip}:{port}")
         
 def message_handler(message: Message, ip: str, port: int):
-    print(f"Broadcast message received: {message} from {ip}:{port}", flush=True)
-    if message.opcode is OpCode.HELLO:
-        hello_handler(message, ip, port)        
+    #print(f"Broadcast message received: {message} from {ip}:{port}", flush=True)
+    if message.opcode is OpCode.HELLO_SERVER:
+        hello_handler(message, ip, port)
+    elif message.opcode is OpCode.HELLO_CLIENT:
+        client_hello_handler(message, ip, port)
     elif message.opcode is OpCode.HELLO_REPLY:
         hello_reply_handler(message, ip, port)
     elif message.opcode is OpCode.HEARTBEAT:
         heartbeat_handler(message, ip, port)
     elif message.opcode is OpCode.ELECTION:
         election_handler(message, ip, port)
+    elif message.opcode is OpCode.TRANSPORT:
+        transport_handler(message, ip, port)
     else:
         return
     print(cp.nodes)
@@ -216,6 +243,7 @@ def main():
 
     parser.add_argument("--port", default=8765, type=int)
     parser.add_argument("--delay", default=1, type=int)
+
 
     args = parser.parse_args()
     print(INTERFACE.ip.compressed)
@@ -235,7 +263,7 @@ def main():
     heartbeat_thread.start()
     threads.append(heartbeat_thread)
     
-    Message(OpCode.HELLO, port=args.port).broadcast(2)
+    Message(OpCode.HELLO_SERVER, port=args.port).broadcast(2)
 
     for thread in threads:
         thread.join()
