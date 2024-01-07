@@ -7,12 +7,12 @@ services:
     command: sh -c "python main.py"
     environment:
       PYTHON_UNBUFFERED: 1
-  # client:
-  #   build:
-  #     dockerfile: client/Containerfile
-  #   command: sh -c "python main.py"
-  #   environment:
-  #     PYTHON_UNBUFFERED: 1
-  #   depends_on:
-  #     - server
+  client:
+    build:
+      dockerfile: client/Containerfile
+    command: sh -c "python main.py"
+    environment:
+      PYTHON_UNBUFFERED: 1
+    depends_on:
+      - server
 

@@ -10,4 +10,4 @@ build:
 	docker-compose build --no-cache
 
 run:
-	docker-compose up --scale server=2
+	docker-compose up --scale server=2 --scale client=1
