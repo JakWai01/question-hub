@@ -181,7 +181,8 @@ def hello_handler(message: Message, ip: str):
 
 def hello_reply_handler(message: Message, ip: str):
     print("Received node state")
-    print(message)
+    for node in message.data:
+        cp.register_node(Node(node["ip"], node["port"], node["leader"]))
 
 def heartbeat_handler(message: Message, ip: str):
     print(f"Received heartbeat from {ip}:{message.port}")
@@ -190,6 +191,7 @@ def heartbeat_handler(message: Message, ip: str):
 
 def election_handler(message: Message, ip: str):
     print(f"Received election from {ip}:{message.port}")
+    print(cp.get_nodes_sorted())
         
 def message_handler(message: Message, ip: str):
     print(f"Broadcast message received from {ip}:{message.port}", flush=True)
