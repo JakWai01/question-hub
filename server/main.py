@@ -8,6 +8,34 @@ from enum import Enum, unique
 from threading import Thread
 from dataclasses import dataclass
 
+class OpCode(str, Enum):
+    HELLO = "hello"
+    HELLO_REPLY = "hello_reply"
+    HEARTBEAT = "heartbeat"
+    ELECTION = "election"
+    
+class Message():
+    def __init__(self, opcode: OpCode, data: bytes | None = None, port: int | None = None):
+        self.opcode: OpCode = opcode
+        self.data: bytes = data
+        self.port: int = port
+
+    def marshal(self):
+        return bytes(json.dumps(self.__dict__), "UTF-8")
+
+    @staticmethod
+    def unmarshal(data_b: bytes) -> "Message":
+        data_str = data_b.decode("UTF-8")
+        payload = json.loads(data_str)
+        print(payload)
+        return Message(OpCode(payload.get("opcode")), payload.get("data"), payload.get("port"))
+
+    def broadcast(self, timeout=0) -> tuple["Message", str, str]:
+        return send(self.marshal(), timeout=timeout)
+
+    def send(self, ip: str, port: int, timeout=0) -> tuple["Message", str, str]:
+        return send(self.marshal(), (ip, port), timeout=timeout)
+
 @dataclass
 class Node:
     ip: str
@@ -69,7 +97,28 @@ class Node:
                 
         except KeyboardInterrupt:
             exit(0)      
+
+    def message_handler(cls, message: Message, ip: str):
+        print(f"Broadcast message received from {ip}:{message.port}", flush=True)
+        if message.opcode is OpCode.HELLO:
+            hello_handler(message, ip)        
+        elif message.opcode is OpCode.HELLO_REPLY:
+            hello_reply_handler(message, ip)
+        elif message.opcode is OpCode.HEARTBEAT:
+            heartbeat_handler(message, ip)
+        elif message.opcode is OpCode.ELECTION:
+            cls.election_handler(message, ip)
+        else:
+            return
+        print(cp.nodes)
     
+    # For now, the node with the heighest port wins. Later on, the most up to date
+    # data shall be used
+    # We can also not solely rely on ports since ports could be the same but the IP could differ
+    def election_handler(cls, message: Message, ip: str):
+        print(f"Received election from {ip}:{message.port}")
+        print(cp.get_nodes_sorted().index(f'{cls.ip}:{cls.port}'))
+   
 class ControlPlane:
     def __init__(self):
         self._nodes: set[Node] = set()
@@ -108,35 +157,10 @@ class ControlPlane:
                 continue
 
     def get_nodes_sorted(self) -> list[Node]:
+        print(f"pre sorted {self._node_heartbeats}")
+        print(cp.nodes)
         return sorted(list(self._node_heartbeats))
 
-class OpCode(str, Enum):
-    HELLO = "hello"
-    HELLO_REPLY = "hello_reply"
-    HEARTBEAT = "heartbeat"
-    ELECTION = "election"
-    
-class Message():
-    def __init__(self, opcode: OpCode, data: bytes | None = None, port: int | None = None):
-        self.opcode: OpCode = opcode
-        self.data: bytes = data
-        self.port: int = port
-
-    def marshal(self):
-        return bytes(json.dumps(self.__dict__), "UTF-8")
-
-    @staticmethod
-    def unmarshal(data_b: bytes) -> "Message":
-        data_str = data_b.decode("UTF-8")
-        payload = json.loads(data_str)
-        print(payload)
-        return Message(OpCode(payload.get("opcode")), payload.get("data"), payload.get("port"))
-
-    def broadcast(self, timeout=0) -> tuple["Message", str, str]:
-        return send(self.marshal(), timeout=timeout)
-
-    def send(self, ip: str, port: int, timeout=0) -> tuple["Message", str, str]:
-        return send(self.marshal(), (ip, port), timeout=timeout)
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -183,29 +207,13 @@ def hello_reply_handler(message: Message, ip: str):
     print("Received node state")
     for node in message.data:
         cp.register_node(Node(node["ip"], node["port"], node["leader"]))
+    print(f"Nodes before election {cp.nodes}")
+    Message(opcode=OpCode.ELECTION).broadcast()
 
 def heartbeat_handler(message: Message, ip: str):
     print(f"Received heartbeat from {ip}:{message.port}")
     cp.register_heartbeat(f"{ip}:{message.port}")
     print(cp._node_heartbeats)
-
-def election_handler(message: Message, ip: str):
-    print(f"Received election from {ip}:{message.port}")
-    print(cp.get_nodes_sorted())
-        
-def message_handler(message: Message, ip: str):
-    print(f"Broadcast message received from {ip}:{message.port}", flush=True)
-    if message.opcode is OpCode.HELLO:
-        hello_handler(message, ip)        
-    elif message.opcode is OpCode.HELLO_REPLY:
-        hello_reply_handler(message, ip)
-    elif message.opcode is OpCode.HEARTBEAT:
-        heartbeat_handler(message, ip)
-    elif message.opcode is OpCode.ELECTION:
-        election_handler(message, ip)
-    else:
-        return
-    print(cp.nodes)
        
 def main():
     parser = argparse.ArgumentParser(
@@ -221,17 +229,18 @@ def main():
    
     threads = []
 
-    node = Node(INTERFACE.ip.compressed, args.port)
+    # Initialize oneself. Start by declaring our self as the leader
+    node = Node(INTERFACE.ip.compressed, args.port, True)
 
-    listener_thread = Thread(target=node.broadcast_target, args=(message_handler,))
+    listener_thread = Thread(target=node.broadcast_target, args=(node.message_handler,))
     listener_thread.start()
     threads.append(listener_thread)
 
-    uni_thread = Thread(target=node.unicast_target, args=(message_handler, args.port))
+    uni_thread = Thread(target=node.unicast_target, args=(node.message_handler, node.port))
     uni_thread.start()
     threads.append(uni_thread)
 
-    heartbeat_thread = Thread(target=node.heartbeat_target, args=(message_handler, args.delay))
+    heartbeat_thread = Thread(target=node.heartbeat_target, args=(node.message_handler, args.delay))
     heartbeat_thread.start()
     threads.append(heartbeat_thread)
     
