@@ -1,13 +1,7 @@
-.PHONY: server client run
+.PHONY: server client
 
 server:
 	python ./server/main.py
 
 client:
 	python ./client/main.py
-
-build:
-	docker-compose build --no-cache
-
-run:
-	docker-compose up --scale server=2
