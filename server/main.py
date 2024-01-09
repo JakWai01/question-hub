@@ -7,6 +7,7 @@ import time
 from enum import Enum, unique
 from threading import Thread
 from dataclasses import dataclass
+import logging
 
 class OpCode(str, Enum):
     HELLO = "hello"
@@ -27,7 +28,7 @@ class Message():
     def unmarshal(data_b: bytes) -> "Message":
         data_str = data_b.decode("UTF-8")
         payload = json.loads(data_str)
-        # print(payload)
+        logging.debug(f"Unmarshalled payload {payload}")
         return Message(OpCode(payload.get("opcode")), payload.get("data"), payload.get("port"))
 
     def broadcast(self, timeout=0) -> tuple["Message", str, str]:
@@ -61,6 +62,7 @@ class Node:
                 data, (ip, port) = listen_socket.recvfrom(1024)
                 if data:
                     msg = Message.unmarshal(data)
+                    logging.debug(f"Broadcast message received: {msg.opcode}")
                     callback(msg, ip)
         except KeyboardInterrupt:
             listen_socket.close()
@@ -75,6 +77,7 @@ class Node:
                 data, (ip, port) = listen_socket.recvfrom(1024)
                 if data:
                     msg = Message.unmarshal(data)
+                    logging.debug(f"Unicast message received: {msg.opcode}")
                     callback(msg, ip)
         except KeyboardInterrupt:
             listen_socket.close()
@@ -93,19 +96,21 @@ class Node:
                             Message(opcode=OpCode.ELECTION).broadcast()
                 cp._node_heartbeats = new_hb_dict
                 Message(opcode=OpCode.HEARTBEAT, port=cls.port).broadcast()
+                cp.register_heartbeat(f"{cls.ip}:{cls.port}")
+                logging.debug(f"Heartbeats: {str(cp._node_heartbeats)}")
                 time.sleep(delay)
                 
         except KeyboardInterrupt:
             exit(0)      
 
     def message_handler(cls, message: Message, ip: str):
-        print(f"Broadcast message received from {ip}:{message.port}", flush=True)
-
         # Drop broadcast messages sent by the node itself
         if ip == cls.ip and message.port == cls.port:
-            print("Received message by myself")
             return
-        elif message.opcode is OpCode.HELLO:
+        
+        logging.info(f"Message of type {message.opcode} received from {ip}:{message.port}")
+
+        if message.opcode is OpCode.HELLO:
             hello_handler(message, ip)        
         elif message.opcode is OpCode.HELLO_REPLY:
             hello_reply_handler(message, ip)
@@ -115,13 +120,11 @@ class Node:
             cls.election_handler(message, ip)
         else:
             return
-        print(cp.nodes)
     
     # For now, the node with the heighest port wins. Later on, the most up to date
     # data shall be used
     # We can also not solely rely on ports since ports could be the same but the IP could differ
     def election_handler(cls, message: Message, ip: str):
-        print(f"Received election from {ip}:{message.port}")
         print(cp.get_nodes_sorted().index(f'{cls.ip}:{cls.port}'))
    
 class ControlPlane:
@@ -218,7 +221,6 @@ def hello_reply_handler(message: Message, ip: str):
 def heartbeat_handler(message: Message, ip: str):
     print(f"Received heartbeat from {ip}:{message.port}")
     cp.register_heartbeat(f"{ip}:{message.port}")
-    print(cp._node_heartbeats)
        
 def main():
     parser = argparse.ArgumentParser(
@@ -227,11 +229,12 @@ def main():
 
     parser.add_argument("--port", default=8765, type=int)
     parser.add_argument("--delay", default=1, type=int)
+    parser.add_argument("--loglevel", default="INFO", type=str)
 
     args = parser.parse_args()
-    # print(INTERFACE.ip.compressed)
-    # print(BROADCAST_IP)
    
+    logging.basicConfig(level=args.loglevel)
+
     threads = []
 
     # Initialize oneself. Start by declaring our self as the leader
