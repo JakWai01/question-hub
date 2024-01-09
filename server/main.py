@@ -152,9 +152,9 @@ class Node:
         elif message.opcode is OpCode.ELECTION:
             cls.election_handler(message, ip)
         elif message.opcode is OpCode.ELECTION_RESULT:
-            print("WE NOW HAVE A NEW LEADER")
+            election_result_handler(message, ip)
         else:
-            return
+            return   
 
     # For now, the node with the heighest port wins. Later on, the most up to date
     # data shall be used
@@ -212,11 +212,13 @@ class Node:
             data=json.dumps(ElectionData(cls.ip, cls.port, 0).__dict__),
         ).send(next_node.ip, next_node.port)
 
+   
 
 class ControlPlane:
     def __init__(self):
         self._nodes: set[Node] = set()
         self._node_heartbeats = {}
+        self.current_leader: Node = None
 
     @property
     def nodes(self):
@@ -308,6 +310,11 @@ def heartbeat_handler(message: Message, ip: str):
     print(f"Received heartbeat from {ip}:{message.port}")
     cp.register_heartbeat(f"{ip}:{message.port}")
 
+def election_result_handler(message: Message, ip: str):
+    new_leader = cp.get_node_from_socket(f"{ip}:{message.port}")
+    new_leader.leader = True
+    cp.current_leader = new_leader
+    logging.info(f"A new leader has been determined: {str(cp.current_leader.__dict__)}")
 
 def main():
     parser = argparse.ArgumentParser(prog="Server")
