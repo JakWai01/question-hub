@@ -108,6 +108,9 @@ class Node:
                         cp.remove_node(node)
                         new_hb_dict.pop(socket)
                         if node.leader is True:
+                            # if len(new_hb_dict) == 1:
+                            #     break
+
                             # TODO: Replace stats
                             next_node_index = (
                                 cp.get_nodes_sorted().index(f"{cls.ip}:{cls.port}") + 1
@@ -128,7 +131,19 @@ class Node:
                 cp._node_heartbeats = new_hb_dict
                 Message(opcode=OpCode.HEARTBEAT, port=cls.port).broadcast()
                 cp.register_heartbeat(f"{cls.ip}:{cls.port}")
-                logging.debug(f"Heartbeats: {str(cp._node_heartbeats)}")
+                logging.info(f"Heartbeats: {str(cp._node_heartbeats)}")
+
+                # If we are the only server node left, we are the leader
+                if len(cp._node_heartbeats) == 1:
+                    print("TAKE LEADERSHIP BACK")
+
+                    if cp.current_leader is not None:
+                        cp.current_leader.leader = False
+
+                    cls.leader = True
+                    cp.current_leader = cls
+                    return
+
                 time.sleep(delay)
 
         except KeyboardInterrupt:
@@ -154,7 +169,7 @@ class Node:
         elif message.opcode is OpCode.ELECTION_RESULT:
             election_result_handler(message, ip)
         else:
-            return   
+            return
 
     # For now, the node with the heighest port wins. Later on, the most up to date
     # data shall be used
@@ -212,7 +227,6 @@ class Node:
             data=json.dumps(ElectionData(cls.ip, cls.port, 0).__dict__),
         ).send(next_node.ip, next_node.port)
 
-   
 
 class ControlPlane:
     def __init__(self):
@@ -253,8 +267,6 @@ class ControlPlane:
                 continue
 
     def get_nodes_sorted(self) -> list[Node]:
-        print(f"pre sorted {self._node_heartbeats}")
-        print(cp.nodes)
         return sorted(list(self._node_heartbeats))
 
 
@@ -310,18 +322,24 @@ def heartbeat_handler(message: Message, ip: str):
     print(f"Received heartbeat from {ip}:{message.port}")
     cp.register_heartbeat(f"{ip}:{message.port}")
 
+
 def election_result_handler(message: Message, ip: str):
     new_leader = cp.get_node_from_socket(f"{ip}:{message.port}")
     new_leader.leader = True
+
+    if cp.current_leader is not None:
+        cp.current_leader.leader = False
+
     cp.current_leader = new_leader
     logging.info(f"A new leader has been determined: {str(cp.current_leader.__dict__)}")
+
 
 def main():
     parser = argparse.ArgumentParser(prog="Server")
 
     parser.add_argument("--port", default=8765, type=int)
     parser.add_argument("--delay", default=1, type=int)
-    parser.add_argument("--loglevel", default="INFO", type=str)
+    parser.add_argument("--loglevel", default="DEBUG", type=str)
 
     args = parser.parse_args()
 
