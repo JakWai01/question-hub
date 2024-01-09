@@ -27,7 +27,7 @@ class Message():
     def unmarshal(data_b: bytes) -> "Message":
         data_str = data_b.decode("UTF-8")
         payload = json.loads(data_str)
-        print(payload)
+        # print(payload)
         return Message(OpCode(payload.get("opcode")), payload.get("data"), payload.get("port"))
 
     def broadcast(self, timeout=0) -> tuple["Message", str, str]:
@@ -100,7 +100,12 @@ class Node:
 
     def message_handler(cls, message: Message, ip: str):
         print(f"Broadcast message received from {ip}:{message.port}", flush=True)
-        if message.opcode is OpCode.HELLO:
+
+        # Drop broadcast messages sent by the node itself
+        if ip == cls.ip and message.port == cls.port:
+            print("Received message by myself")
+            return
+        elif message.opcode is OpCode.HELLO:
             hello_handler(message, ip)        
         elif message.opcode is OpCode.HELLO_REPLY:
             hello_reply_handler(message, ip)
@@ -224,13 +229,14 @@ def main():
     parser.add_argument("--delay", default=1, type=int)
 
     args = parser.parse_args()
-    print(INTERFACE.ip.compressed)
-    print(BROADCAST_IP)
+    # print(INTERFACE.ip.compressed)
+    # print(BROADCAST_IP)
    
     threads = []
 
     # Initialize oneself. Start by declaring our self as the leader
     node = Node(INTERFACE.ip.compressed, args.port, True)
+    cp.register_node(node)
 
     listener_thread = Thread(target=node.broadcast_target, args=(node.message_handler,))
     listener_thread.start()
