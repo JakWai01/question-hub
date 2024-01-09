@@ -9,14 +9,25 @@ from threading import Thread
 from dataclasses import dataclass
 import logging
 
+
 class OpCode(str, Enum):
     HELLO = "hello"
     HELLO_REPLY = "hello_reply"
     HEARTBEAT = "heartbeat"
     ELECTION = "election"
-    
-class Message():
-    def __init__(self, opcode: OpCode, data: bytes | None = None, port: int | None = None):
+
+
+class ElectionData:
+    def __init__(self, leader_ip: str, leader_port: int, leader_stat: int):
+        self.leader_ip = leader_ip
+        self.leader_port = leader_port
+        self.leader_stat = leader_stat
+
+
+class Message:
+    def __init__(
+        self, opcode: OpCode, data: bytes | None = None, port: int | None = None
+    ):
         self.opcode: OpCode = opcode
         self.data: bytes = data
         self.port: int = port
@@ -29,13 +40,16 @@ class Message():
         data_str = data_b.decode("UTF-8")
         payload = json.loads(data_str)
         logging.debug(f"Unmarshalled payload {payload}")
-        return Message(OpCode(payload.get("opcode")), payload.get("data"), payload.get("port"))
+        return Message(
+            OpCode(payload.get("opcode")), payload.get("data"), payload.get("port")
+        )
 
     def broadcast(self, timeout=0) -> tuple["Message", str, str]:
         return send(self.marshal(), timeout=timeout)
 
     def send(self, ip: str, port: int, timeout=0) -> tuple["Message", str, str]:
         return send(self.marshal(), (ip, port), timeout=timeout)
+
 
 @dataclass
 class Node:
@@ -47,15 +61,15 @@ class Node:
         cls.ip = ip
         cls.port = port
         cls.leader = leader
-        
+
     def __hash__(cls):
-        return hash(f"{cls.ip}:{cls.port}") 
- 
+        return hash(f"{cls.ip}:{cls.port}")
+
     def broadcast_target(cls, callback):
         listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        listen_socket.bind(('', BROADCAST_PORT))
+        listen_socket.bind(("", BROADCAST_PORT))
 
         try:
             while True:
@@ -72,7 +86,7 @@ class Node:
         listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         listen_socket.bind((INTERFACE.ip.compressed, lport))
 
-        try: 
+        try:
             while True:
                 data, (ip, port) = listen_socket.recvfrom(1024)
                 if data:
@@ -93,40 +107,108 @@ class Node:
                         cp.remove_node(node)
                         new_hb_dict.pop(socket)
                         if node.leader is True:
-                            Message(opcode=OpCode.ELECTION).broadcast()
+                            # TODO: Replace stats
+                            next_node_index = (
+                                cp.get_nodes_sorted().index(f"{cls.ip}:{cls.port}") + 1
+                            )
+                            if next_node_index >= len(cp.nodes):
+                                next_node_index = 0
+
+                            next_node = cp.get_node_from_socket(
+                                cp.get_nodes_sorted()[next_node_index]
+                            )
+
+                            Message(
+                                opcode=OpCode.ELECTION,
+                                data=json.dumps(
+                                    ElectionData(cls.ip, cls.port, 0).__dict__
+                                ),
+                            ).send(next_node.ip, next_node.port)
                 cp._node_heartbeats = new_hb_dict
                 Message(opcode=OpCode.HEARTBEAT, port=cls.port).broadcast()
                 cp.register_heartbeat(f"{cls.ip}:{cls.port}")
                 logging.debug(f"Heartbeats: {str(cp._node_heartbeats)}")
                 time.sleep(delay)
-                
+
         except KeyboardInterrupt:
-            exit(0)      
+            exit(0)
 
     def message_handler(cls, message: Message, ip: str):
         # Drop broadcast messages sent by the node itself
         if ip == cls.ip and message.port == cls.port:
             return
-        
-        logging.info(f"Message of type {message.opcode} received from {ip}:{message.port}")
+
+        logging.info(
+            f"Message of type {message.opcode} received from {ip}:{message.port}"
+        )
 
         if message.opcode is OpCode.HELLO:
-            hello_handler(message, ip)        
+            hello_handler(message, ip)
         elif message.opcode is OpCode.HELLO_REPLY:
-            hello_reply_handler(message, ip)
+            cls.hello_reply_handler(message, ip)
         elif message.opcode is OpCode.HEARTBEAT:
             heartbeat_handler(message, ip)
         elif message.opcode is OpCode.ELECTION:
             cls.election_handler(message, ip)
         else:
             return
-    
+
     # For now, the node with the heighest port wins. Later on, the most up to date
     # data shall be used
     # We can also not solely rely on ports since ports could be the same but the IP could differ
     def election_handler(cls, message: Message, ip: str):
-        print(cp.get_nodes_sorted().index(f'{cls.ip}:{cls.port}'))
-   
+        next_node_index = cp.get_nodes_sorted().index(f"{cls.ip}:{cls.port}") + 1
+        if next_node_index >= len(cp.nodes):
+            next_node_index = 0
+
+        next_node = cp.get_node_from_socket(cp.get_nodes_sorted()[next_node_index])
+        print(next_node)
+
+        msg = json.loads(message.data)
+
+        if msg["leader_port"] == cls.port and msg["leader_ip"] == cls.ip:
+            cls.leader = True
+            logging.info(f"I am the new leader: {cls.__dict__}")
+            return
+
+        if msg["leader_port"] >= cls.port:
+            Message(
+                opcode=OpCode.ELECTION,
+                data=json.dumps(
+                    ElectionData(
+                        msg["leader_ip"],
+                        msg["leader_port"],
+                        msg["leader_stat"],
+                    ).__dict__
+                ),
+            ).send(next_node.ip, next_node.port)
+        else:
+            # TODO: Replace stats
+            Message(
+                opcode=OpCode.ELECTION,
+                data=json.dumps(ElectionData(cls.ip, cls.port, 0).__dict__),
+            ).send(next_node.ip, next_node.port)
+
+    def hello_reply_handler(cls, message: Message, ip: str):
+        print("Received node state")
+        for node in message.data:
+            cp.register_node(Node(node["ip"], node["port"], node["leader"]))
+            cp.register_heartbeat(f"{node['ip']}:{node['port']}")
+        print(f"Nodes before election {cp.nodes}")
+
+        # Start election to figure out if you should be the new leader
+        next_node_index = cp.get_nodes_sorted().index(f"{cls.ip}:{cls.port}") + 1
+        if next_node_index >= len(cp.nodes):
+            next_node_index = 0
+
+        next_node = cp.get_node_from_socket(cp.get_nodes_sorted()[next_node_index])
+
+        Message(
+            opcode=OpCode.ELECTION,
+            data=json.dumps(ElectionData(cls.ip, cls.port, 0).__dict__),
+        ).send(next_node.ip, next_node.port)
+
+
 class ControlPlane:
     def __init__(self):
         self._nodes: set[Node] = set()
@@ -138,11 +220,11 @@ class ControlPlane:
 
     def register_heartbeat(self, socket: str):
         self._node_heartbeats[socket] = int(time.time())
-    
+
     @nodes.setter
     def register_node_state(self, nodes: set[Node]):
         self._nodes = nodes
-        
+
     def register_node(self, node: Node):
         self._nodes.add(node)
 
@@ -150,7 +232,7 @@ class ControlPlane:
         self._nodes.remove(node)
 
     def get_node_from_socket(self, socket: str) -> Node | None:
-        ip, port = socket.split(':')
+        ip, port = socket.split(":")
         for node in cp.nodes:
             if node.ip == ip and node.port == int(port):
                 return node
@@ -172,12 +254,14 @@ class ControlPlane:
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
+
 def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0):
     if address is None:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         address = (BROADCAST_IP, BROADCAST_PORT)
 
     sock.sendto(payload, address)
+
 
 def is_valid(address: str, broadcast: str | None):
     if not broadcast:
@@ -199,6 +283,7 @@ def get_network_interface() -> IPv4Interface:
                 return IPv4Interface(f"{address}/{netmask}")
     raise Exception("Cannot find network interface to listen on")
 
+
 # hostname and network interface
 HOSTNAME = socket.gethostname()
 INTERFACE = get_network_interface()
@@ -207,58 +292,59 @@ BROADCAST_PORT = 34567
 BROADCAST_IP = str(INTERFACE.network.broadcast_address)
 cp = ControlPlane()
 
+
 def hello_handler(message: Message, ip: str):
     cp.register_node(Node(ip, message.port))
-    Message(opcode=OpCode.HELLO_REPLY, data=list(map(lambda node: node.__dict__, cp.nodes))).send(ip, message.port)
+    Message(
+        opcode=OpCode.HELLO_REPLY, data=list(map(lambda node: node.__dict__, cp.nodes))
+    ).send(ip, message.port)
 
-def hello_reply_handler(message: Message, ip: str):
-    print("Received node state")
-    for node in message.data:
-        cp.register_node(Node(node["ip"], node["port"], node["leader"]))
-    print(f"Nodes before election {cp.nodes}")
-    Message(opcode=OpCode.ELECTION).broadcast()
 
 def heartbeat_handler(message: Message, ip: str):
     print(f"Received heartbeat from {ip}:{message.port}")
     cp.register_heartbeat(f"{ip}:{message.port}")
-       
+
+
 def main():
-    parser = argparse.ArgumentParser(
-        prog='Server'
-    )
+    parser = argparse.ArgumentParser(prog="Server")
 
     parser.add_argument("--port", default=8765, type=int)
     parser.add_argument("--delay", default=1, type=int)
     parser.add_argument("--loglevel", default="INFO", type=str)
 
     args = parser.parse_args()
-   
+
     logging.basicConfig(level=args.loglevel)
 
     threads = []
 
-    # Initialize oneself. Start by declaring our self as the leader
-    node = Node(INTERFACE.ip.compressed, args.port, True)
+    # Initialize oneself.
+    node = Node(INTERFACE.ip.compressed, args.port, False)
     cp.register_node(node)
 
     listener_thread = Thread(target=node.broadcast_target, args=(node.message_handler,))
     listener_thread.start()
     threads.append(listener_thread)
 
-    uni_thread = Thread(target=node.unicast_target, args=(node.message_handler, node.port))
+    uni_thread = Thread(
+        target=node.unicast_target, args=(node.message_handler, node.port)
+    )
     uni_thread.start()
     threads.append(uni_thread)
 
-    heartbeat_thread = Thread(target=node.heartbeat_target, args=(node.message_handler, args.delay))
+    heartbeat_thread = Thread(
+        target=node.heartbeat_target, args=(node.message_handler, args.delay)
+    )
     heartbeat_thread.start()
     threads.append(heartbeat_thread)
-    
+
     Message(OpCode.HELLO, port=node.port).broadcast(2)
 
     for thread in threads:
         thread.join()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
