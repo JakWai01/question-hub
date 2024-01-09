@@ -15,6 +15,7 @@ class OpCode(str, Enum):
     HELLO_REPLY = "hello_reply"
     HEARTBEAT = "heartbeat"
     ELECTION = "election"
+    ELECTION_RESULT = "election_result"
 
 
 class ElectionData:
@@ -150,6 +151,8 @@ class Node:
             heartbeat_handler(message, ip)
         elif message.opcode is OpCode.ELECTION:
             cls.election_handler(message, ip)
+        elif message.opcode is OpCode.ELECTION_RESULT:
+            print("WE NOW HAVE A NEW LEADER")
         else:
             return
 
@@ -169,6 +172,7 @@ class Node:
         if msg["leader_port"] == cls.port and msg["leader_ip"] == cls.ip:
             cls.leader = True
             logging.info(f"I am the new leader: {cls.__dict__}")
+            Message(opcode=OpCode.ELECTION_RESULT, port=cls.port).broadcast()
             return
 
         if msg["leader_port"] >= cls.port:
