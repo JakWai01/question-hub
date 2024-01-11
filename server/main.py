@@ -111,7 +111,14 @@ class Node:
                         cp.remove_node(node)
                         logging.debug(f"Node to be removed due to timeout: {node}")
                         new_hb_dict.pop(socket)
+                        cp._node_heartbeats = new_hb_dict
+                        print(cp._node_heartbeats)
+                        print(cp.nodes)
+                        # TODO: Killing two leaders after each other leads to two nodes cycling without a leader
+                        # In this case, we don't see the last node as the leader
+                        # After a change in leaders, we don't set that node to be the new leader. Or at least not all nodes
                         if node.leader is True:
+                            print("LEADER IS DEAD")
                             # TODO: Replace stats
                             next_node_index = (
                                 cp.get_nodes_sorted().index(f"{cls.ip}:{cls.port}") + 1
@@ -123,13 +130,16 @@ class Node:
                                 cp.get_nodes_sorted()[next_node_index]
                             )
 
+                            print(f"NEXT NODE: {next_node}")
+                            print(f"NODES: {cp.nodes}")
+                            print(f"HEARTBEATS: {cp._node_heartbeats}")
                             Message(
                                 opcode=OpCode.ELECTION,
+                                port=cls.port,
                                 data=json.dumps(
                                     ElectionData(cls.ip, cls.port, 0).__dict__
                                 ),
                             ).send(next_node.ip, next_node.port)
-                cp._node_heartbeats = new_hb_dict
                 Message(opcode=OpCode.HEARTBEAT, port=cls.port).broadcast()
                 cp.register_heartbeat(f"{cls.ip}:{cls.port}")
                 logging.debug(f"Heartbeats: {str(cp._node_heartbeats)}")
@@ -139,7 +149,7 @@ class Node:
                 time.sleep(delay)
 
                 # If we are the only server node alive after waiting two seconds, we are the leader
-                if len(cp._node_heartbeats) == 1:
+                if len(cp._node_heartbeats) == 1 and cls.leader == False:
                     logging.info("Taking leadership since I am the only node left")
 
                     if cp.current_leader is not None:
@@ -232,6 +242,7 @@ class Node:
         for node in cp.nodes:
             if node.leader == True:
                 pre_existing_leader = True
+                cp.current_leader = node
             else:
                 continue
 
@@ -249,13 +260,16 @@ class Node:
                 data=json.dumps(ElectionData(cls.ip, cls.port, 0).__dict__),
             ).send(next_node.ip, next_node.port)
 
+    # TODO: Taking leadership since I am the only node left when in fact two nodes are available
     def hello_handler(cls, message: Message, ip: str):
         cp.register_node(Node(ip, message.port))
-        Message(
-            opcode=OpCode.HELLO_REPLY,
-            port=cls.port,
-            data=list(map(lambda node: node.__dict__, cp.nodes)),
-        ).send(ip, message.port)
+
+        if cp.current_leader == None or cls.leader == True:
+            Message(
+                opcode=OpCode.HELLO_REPLY,
+                port=cls.port,
+                data=list(map(lambda node: node.__dict__, cp.nodes)),
+            ).send(ip, message.port)
 
 
 class ControlPlane:
