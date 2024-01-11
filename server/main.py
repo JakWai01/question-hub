@@ -106,6 +106,8 @@ class Node:
                     if hb + 2 < int(time.time()):
                         node = cp.get_node_from_socket(socket)
                         cp.remove_node(node)
+                        # TODO: We don't get any heartbeats from the other node
+                        logging.debug(f"Node to be removed due to timeout: {node}")
                         new_hb_dict.pop(socket)
                         if node.leader is True:
                             # if len(new_hb_dict) == 1:
@@ -118,6 +120,10 @@ class Node:
                             if next_node_index >= len(cp.nodes):
                                 next_node_index = 0
 
+                            print(f"NODES BEFORE: {cp.get_nodes_sorted()}")
+                            print(f"NODE INDEX: {next_node_index}")
+                            print(f"NODE ITSELF: {cp.get_nodes_sorted()[next_node_index]}")
+                            print(f"NODES: {cp.nodes}")
                             next_node = cp.get_node_from_socket(
                                 cp.get_nodes_sorted()[next_node_index]
                             )
@@ -132,6 +138,10 @@ class Node:
                 Message(opcode=OpCode.HEARTBEAT, port=cls.port).broadcast()
                 cp.register_heartbeat(f"{cls.ip}:{cls.port}")
                 logging.info(f"Heartbeats: {str(cp._node_heartbeats)}")
+                logging.info(f"Nodes after Heartbeats: {str(cp.nodes)}")
+                
+                # If we wait before, we should get other heartbeats before
+                time.sleep(delay)
 
                 # If we are the only server node left, we are the leader
                 if len(cp._node_heartbeats) == 1:
@@ -142,9 +152,6 @@ class Node:
 
                     cls.leader = True
                     cp.current_leader = cls
-                    return
-
-                time.sleep(delay)
 
         except KeyboardInterrupt:
             exit(0)
@@ -210,22 +217,42 @@ class Node:
 
     def hello_reply_handler(cls, message: Message, ip: str):
         print("Received node state")
-        for node in message.data:
-            cp.register_node(Node(node["ip"], node["port"], node["leader"]))
-            cp.register_heartbeat(f"{node['ip']}:{node['port']}")
-        print(f"Nodes before election {cp.nodes}")
+        # new_nodes = set()
+        # for node in message.data: 
+        #     new_nodes.add(Node(node["ip"], node["port"], node["leader"]))
+        #     # cp.register_node(Node(node["ip"], node["port"], node["leader"]))
+        #     cp.register_heartbeat(f"{node['ip']}:{node['port']}")
+        # # print(f"Nodes before election {cp.nodes}")
+        # cp.nodes = new_nodes
+        # Use a list comprehension to create Node objects from JSON data
+        new_nodes = [Node(node["ip"], node["port"], node["leader"]) for node in message.data]
+        
+        # Register nodes and heartbeats
+        for node in new_nodes:
+            cp.register_heartbeat(f"{node.ip}:{node.port}")
 
+        print(cp.nodes)
+        print(new_nodes)
+        # Update the nodes property directly
+        cp.nodes.update(set(new_nodes))
+        print(f"CURRENT NODES {cp.nodes}")
+
+        
+       
         # Start election to figure out if you should be the new leader
-        next_node_index = cp.get_nodes_sorted().index(f"{cls.ip}:{cls.port}") + 1
-        if next_node_index >= len(cp.nodes):
-            next_node_index = 0
+        # next_node_index = cp.get_nodes_sorted().index(f"{cls.ip}:{cls.port}") + 1
+        # if next_node_index >= len(cp.nodes):
+        #     next_node_index = 0
 
-        next_node = cp.get_node_from_socket(cp.get_nodes_sorted()[next_node_index])
+        # The bug is that there exist two items for the same node
+        # print(cp.get_nodes_sorted())
+        # print(next_node_index)
+        # next_node = cp.get_node_from_socket(cp.get_nodes_sorted()[next_node_index])
 
-        Message(
-            opcode=OpCode.ELECTION,
-            data=json.dumps(ElectionData(cls.ip, cls.port, 0).__dict__),
-        ).send(next_node.ip, next_node.port)
+        # Message(
+        #     opcode=OpCode.ELECTION,
+        #     data=json.dumps(ElectionData(cls.ip, cls.port, 0).__dict__),
+        # ).send(next_node.ip, next_node.port)
 
 
 class ControlPlane:
@@ -242,8 +269,8 @@ class ControlPlane:
         self._node_heartbeats[socket] = int(time.time())
 
     @nodes.setter
-    def register_node_state(self, nodes: set[Node]):
-        self._nodes = nodes
+    def nodes(self, new_nodes: set[Node]):
+        self._nodes = new_nodes
 
     def register_node(self, node: Node):
         self._nodes.add(node)
@@ -260,6 +287,7 @@ class ControlPlane:
                 continue
 
     def get_leader(self) -> Node | None:
+        # TODO: This could be replaced with return cp.current_leader
         for node in cp.nodes:
             if node.leader is True:
                 return node
