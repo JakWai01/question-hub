@@ -77,7 +77,7 @@ class Node:
                 data, (ip, port) = listen_socket.recvfrom(1024)
                 if data:
                     msg = Message.unmarshal(data)
-                    
+
                     if ip != cls.ip:
                         logging.debug(f"Broadcast message received: {msg.opcode}")
 
@@ -134,7 +134,7 @@ class Node:
                 cp.register_heartbeat(f"{cls.ip}:{cls.port}")
                 logging.debug(f"Heartbeats: {str(cp._node_heartbeats)}")
                 logging.debug(f"Nodes after Heartbeats: {str(cp.nodes)}")
-                
+
                 # If we wait before, we should get other heartbeats before
                 time.sleep(delay)
 
@@ -187,7 +187,9 @@ class Node:
 
         if msg["leader_port"] == cls.port and msg["leader_ip"] == cls.ip:
             cls.leader = True
-            logging.info(f"Node {cls.ip}:{cls.port} [this node] has been appointed the new leader")
+            logging.info(
+                f"Node {cls.ip}:{cls.port} [this node] has been appointed the new leader"
+            )
             Message(opcode=OpCode.ELECTION_RESULT, port=cls.port).broadcast()
             return
 
@@ -214,8 +216,10 @@ class Node:
     def hello_reply_handler(cls, message: Message, ip: str):
         logging.debug(f"Received node state: {message.data}")
 
-        new_nodes = [Node(node["ip"], node["port"], node["leader"]) for node in message.data]
-        
+        new_nodes = [
+            Node(node["ip"], node["port"], node["leader"]) for node in message.data
+        ]
+
         # Register nodes and heartbeats
         for node in new_nodes:
             cp.register_heartbeat(f"{node.ip}:{node.port}")
@@ -248,9 +252,10 @@ class Node:
     def hello_handler(cls, message: Message, ip: str):
         cp.register_node(Node(ip, message.port))
         Message(
-            opcode=OpCode.HELLO_REPLY, port=cls.port, data=list(map(lambda node: node.__dict__, cp.nodes))
+            opcode=OpCode.HELLO_REPLY,
+            port=cls.port,
+            data=list(map(lambda node: node.__dict__, cp.nodes)),
         ).send(ip, message.port)
-
 
 
 class ControlPlane:
@@ -298,8 +303,10 @@ def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0):
     if address is None:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         address = (BROADCAST_IP, BROADCAST_PORT)
-    
-    logging.info(f"Sending message of type {json.loads(payload)['opcode']} to {address[0]}:{address[1]}")
+
+    logging.info(
+        f"Sending message of type {json.loads(payload)['opcode']} to {address[0]}:{address[1]}"
+    )
 
     sock.sendto(payload, address)
 
@@ -334,8 +341,6 @@ BROADCAST_IP = str(INTERFACE.network.broadcast_address)
 cp = ControlPlane()
 
 
-
-
 def heartbeat_handler(message: Message, ip: str):
     cp.register_heartbeat(f"{ip}:{message.port}")
 
@@ -348,7 +353,9 @@ def election_result_handler(message: Message, ip: str):
         cp.current_leader.leader = False
 
     cp.current_leader = new_leader
-    logging.info(f"Node {cp.current_leader.ip}:{cp.current_leader.port} has been appointed the new leader")
+    logging.info(
+        f"Node {cp.current_leader.ip}:{cp.current_leader.port} has been appointed the new leader"
+    )
 
 
 def main():
