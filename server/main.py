@@ -15,15 +15,20 @@ class OpCode(str, Enum):
     HELLO_REPLY = "hello_reply"
     HEARTBEAT = "heartbeat"
     ELECTION = "election"
+    ELECTION_VOTE = "election_vote"
+    ELECTION_REPLY = "election_reply"
     ELECTION_RESULT = "election_result"
 
-
+class Election:
+    received: dict[str, list[tuple[int, float]]] = {}
+    
 class ElectionData:
-    def __init__(self, leader_ip: str, leader_port: int, leader_stat: int):
+    def __init__(self, leader_ip: str, leader_port: int, leader_stat: int, hop: int | None, phase: int):
         self.leader_ip = leader_ip
         self.leader_port = leader_port
         self.leader_stat = leader_stat
-
+        self.hop = hop
+        self.phase = phase
 
 class Message:
     def __init__(
@@ -66,6 +71,53 @@ class Node:
     def __hash__(cls):
         return hash(f"{cls.ip}:{cls.port}")
 
+    
+    def make_leader(cls):
+        if cp.current_leader is not None:
+            cp.current_leader.leader = False
+
+        cls.leader = True
+        cp.current_leader = cls
+
+    def initiate_election(cls):
+        logging.info("Starting a new election")
+
+        if len(cp._node_heartbeats) == 1:
+            logging.info("We are the only node")
+            cls.make_leader()
+            return
+
+        cls.send_vote_to_neighbours(phase=0, hop=1)
+
+    def send_vote_to_neighbours(cls, phase: int | None = 0 , hop: int | None = 1):
+        msg = ElectionData(cls.ip, cls.port, cls.port, hop, phase)
+
+        right_neihghbour = cls.right_neighbour
+        left_neighbour = cls.left_neighbour
+
+        for node in [left_neighbour, right_neighbour]:
+            Message(opcode=ELECTION_VOTE, port=cls.port, data=json.dumps(msg.__dict__)).send(node.ip, node.port)
+
+    def get_next_neighbour(socket: str):
+        socket_ring_index = cp.get_nodes_sorted.index(socket)
+
+        if socket_ring_index < cls.ring_index:
+            return cls.left_neighbour()
+        else:
+            return cls.right_neighbour()
+
+    @property
+    def ring_index(cls):
+        return cp.get_nodes_sorted.index(f"{cls.ip}:{cls.port}")
+
+    @property
+    def left_neighbour(self):
+        return cp.get_nodes_sorted[(cls.ring_index - 1) % len(nodes)]
+    
+    @property
+    def right_neighbour(self):
+        return cp.get_nodes_sorted[(cls.ring_index + 1) % len(nodes)]
+        
     def broadcast_target(cls, callback):
         listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -112,14 +164,7 @@ class Node:
                         logging.debug(f"Node to be removed due to timeout: {node}")
                         new_hb_dict.pop(socket)
                         cp._node_heartbeats = new_hb_dict
-                        print(cp._node_heartbeats)
-                        print(cp.nodes)
-                        # TODO: Killing two leaders after each other leads to two nodes cycling without a leader
-                        # In this case, we don't see the last node as the leader
-                        # After a change in leaders, we don't set that node to be the new leader. Or at least not all nodes
                         if node.leader is True:
-                            print("LEADER IS DEAD")
-                            # TODO: Replace stats
                             next_node_index = (
                                 cp.get_nodes_sorted().index(f"{cls.ip}:{cls.port}") + 1
                             )
@@ -130,9 +175,6 @@ class Node:
                                 cp.get_nodes_sorted()[next_node_index]
                             )
 
-                            print(f"NEXT NODE: {next_node}")
-                            print(f"NODES: {cp.nodes}")
-                            print(f"HEARTBEATS: {cp._node_heartbeats}")
                             Message(
                                 opcode=OpCode.ELECTION,
                                 port=cls.port,
@@ -142,8 +184,6 @@ class Node:
                             ).send(next_node.ip, next_node.port)
                 Message(opcode=OpCode.HEARTBEAT, port=cls.port).broadcast()
                 cp.register_heartbeat(f"{cls.ip}:{cls.port}")
-                logging.debug(f"Heartbeats: {str(cp._node_heartbeats)}")
-                logging.debug(f"Nodes after Heartbeats: {str(cp.nodes)}")
 
                 # If we wait before, we should get other heartbeats before
                 time.sleep(delay)
@@ -151,12 +191,7 @@ class Node:
                 # If we are the only server node alive after waiting two seconds, we are the leader
                 if len(cp._node_heartbeats) == 1 and cls.leader == False:
                     logging.info("Taking leadership since I am the only node left")
-
-                    if cp.current_leader is not None:
-                        cp.current_leader.leader = False
-
-                    cls.leader = True
-                    cp.current_leader = cls
+                    cls.make_leader()
 
         except KeyboardInterrupt:
             exit(0)
@@ -187,41 +222,46 @@ class Node:
     # data shall be used
     # We can also not solely rely on ports since ports could be the same but the IP could differ
     def election_handler(cls, message: Message, ip: str):
-        next_node_index = cp.get_nodes_sorted().index(f"{cls.ip}:{cls.port}") + 1
-        if next_node_index >= len(cp.nodes):
-            next_node_index = 0
+        sender_socket = f"{ip}:{message.data['port']}"
+        next_neighbour = cls.get_next_neighbour(sender_socket)
+        
+        vote = ElectionData(**message.data)
 
-        next_node = cp.get_node_from_socket(cp.get_nodes_sorted()[next_node_index])
-
-        msg = json.loads(message.data)
-
-        if msg["leader_port"] == cls.port and msg["leader_ip"] == cls.ip:
-            cls.leader = True
-            logging.info(
-                f"Node {cls.ip}:{cls.port} [this node] has been appointed the new leader"
-            )
-            Message(opcode=OpCode.ELECTION_RESULT, port=cls.port).broadcast()
-            return
-
-        if msg["leader_port"] >= cls.port:
-            Message(
-                opcode=OpCode.ELECTION,
-                port=cls.port,
-                data=json.dumps(
-                    ElectionData(
-                        msg["leader_ip"],
-                        msg["leader_port"],
-                        msg["leader_stat"],
-                    ).__dict__
-                ),
-            ).send(next_node.ip, next_node.port)
+        if vote.hop is 0:
+            if vote.port != cls.port:
+                logging.info(f"Passing reply {vote} to {next_neighbour}")
+                Message(opcode=opcode.ELECTION_REPLY, port=cls.port, data=vote)
+            else:
+                logging.info(f"Received vote {vote}")
+                if self.received.get(vote.socket) is None:
+                    self.received[vote.socket] = []
+                received = self.received.get(vote.socket, [])
+                if vote in received:
+                    self.send_vote_to_neighbours(vote.socket, phase=vote.phase + 1, hop=1)
+                else:
+                    received.append(vote)
         else:
-            # TODO: Replace stats
-            Message(
-                opcode=OpCode.ELECTION,
-                port=cls.port,
-                data=json.dumps(ElectionData(cls.ip, cls.port, 0).__dict__),
-            ).send(next_node.ip, next_node.port)
+            if vote.port > cls.port:
+                if vote.hop < 2**vote.phase:
+                    msg = ElectionData(vote.leader_ip, vote_leader_port, vote.leader_stat, vote.hop + 1, vote.phase)
+                    logging.info(f"Sending request {msg} to {next_neighbour}")
+                    Message(opcode=opcode.ELECTION_VOTE, port=cls.port, data=msg.__dict__).send(next_neighbour.ip, next_neighbour.port)
+                elif 2**vote.phase > len(cp.nodes):
+                    logging.debug(f"Invalid election state {vote}")
+                else:
+                    # This will be a bug
+                    vote.hop = 0
+                    logging.info(f"Sending reply {vote} to {previous_neighbour}")
+                    Message(opcode=opcode.ELECTION_REPLY, port=cls.port, data=vote.__dict__)
+            elif vote.port == cls.port:
+                final = 2**(vote.phase + 1) > len(cp.nodes)
+                if final:
+                    logging.info(f"Elected {vote.ip}:{vote.port} as leader")
+                    cp.leader = cp.get_node_from_socket(f"{vote.ip}:{vote.port}")
+
+                    
+                
+
 
     def hello_reply_handler(cls, message: Message, ip: str):
         logging.debug(f"Received node state: {message.data}")
