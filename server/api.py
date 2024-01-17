@@ -59,10 +59,10 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election)
                 if hb + 2 < int(time.time()):
                     node = cp.get_node_from_socket(socket)
                     cp.remove_node(node)
-                    logging.debug(f"Node to be removed due to timeout: {node}")
+                    logging.info(f"Lost connection to node: {node.ip}:{node.port}")
                     new_hb_dict.pop(socket)
                     cp._node_heartbeats = new_hb_dict
-                    if node.leader is True:
+                    if node.leader is True and len(cp._node_heartbeats) > 1:
                         e = Election(cp)
                         e.initiate_election()
 
@@ -93,7 +93,7 @@ def message_handler(message: Message, ip: str, cp: ControlPlane, election: Elect
             hello_reply_handler(message, ip, cp, election)
         elif message.opcode is OpCode.HEARTBEAT:
             heartbeat_handler(message, ip, cp, election)
-        elif message.opcode is OpCode.ELECTION:
+        elif message.opcode is OpCode.ELECTION_VOTE or message.opcode is OpCode.ELECTION_REPLY:
             election_handler(message, ip, cp, election)
         elif message.opcode is OpCode.ELECTION_RESULT:
             election_result_handler(message, ip, cp, election)
@@ -116,13 +116,14 @@ def election_handler(message: Message, ip: str, cp: ControlPlane, election: Elec
     if vote.hop is None:
         if vote.leader_stat != cp.node.port:
             vote.hop = None
-            Message(opcode=OpCode.ELECTION, port=cp.node.port, data=json.dumps(vote.__dict__)).send(next_neighbour.ip, next_neighbour.port)
+            Message(opcode=OpCode.ELECTION_REPLY, port=cp.node.port, data=json.dumps(vote.__dict__)).send(next_neighbour.ip, next_neighbour.port)
         else:
-            if  election.received.get(vote.leader_port) is None:
+            if election.received.get(vote.leader_port) is None:
                 election.received[vote.leader_port] = []
             received = election.received.get(vote.leader_port, [])
             # TODO: Use socket instead
             if vote.leader_port in received:
+                print("SENDING OUT NEXT PHASE")
                 election.send_vote_to_neighbours(phase=vote.phase + 1, hop=1)
             else:
                 received.append(vote.leader_port)
@@ -132,15 +133,16 @@ def election_handler(message: Message, ip: str, cp: ControlPlane, election: Elec
         if vote.leader_stat > cp.node.port:
             if vote.hop < 2**vote.phase:
                 msg = ElectionData(vote.leader_ip, vote.leader_port, vote.leader_stat, vote.hop + 1, vote.phase)
-                Message(opcode=OpCode.ELECTION, port=cp.node.port, data=json.dumps(msg.__dict__)).send(next_neighbour.ip, next_neighbour.port)
+                Message(opcode=OpCode.ELECTION_VOTE, port=cp.node.port, data=json.dumps(msg.__dict__)).send(next_neighbour.ip, next_neighbour.port)
             elif 2**vote.phase > len(cp.nodes):
                 logging.info(f"Invalid election state {vote}")
             else:
                 vote.hop = None
-                Message(opcode=OpCode.ELECTION, port=cp.node.port, data=json.dumps(vote.__dict__)).send(previous_neighbour.ip, previous_neighbour.port)
+                Message(opcode=OpCode.ELECTION_REPLY, port=cp.node.port, data=json.dumps(vote.__dict__)).send(previous_neighbour.ip, previous_neighbour.port)
         elif vote.leader_stat == cp.node.port:
             final = 2**(vote.phase + 1) > len(cp.nodes)
             if final:
+                election.received = {}
                 cp.make_leader(cp.get_node_from_socket(f"{vote.leader_ip}:{vote.leader_port}"))
                 Message(opcode=OpCode.ELECTION_RESULT, port=vote.leader_port).broadcast()
 

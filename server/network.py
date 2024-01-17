@@ -37,7 +37,8 @@ class OpCode(str, Enum):
     HELLO = "hello"
     HELLO_REPLY = "hello_reply"
     HEARTBEAT = "heartbeat"
-    ELECTION = "election"
+    ELECTION_VOTE = "election_vote"
+    ELECTION_REPLY = "election_reply"
     ELECTION_RESULT = "election_result"
 
 class Message:

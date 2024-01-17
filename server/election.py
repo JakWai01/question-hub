@@ -39,4 +39,4 @@ class Election:
         left_neighbour = self.cp.left_neighbour(self.cp.node)
 
         for neighbour in [left_neighbour, right_neighbour]:
-            Message(opcode=OpCode.ELECTION, port=self.cp.node.port, data=json.dumps(msg.__dict__)).send(neighbour.ip, neighbour.port)
+            Message(opcode=OpCode.ELECTION_VOTE, port=self.cp.node.port, data=json.dumps(msg.__dict__)).send(neighbour.ip, neighbour.port)
