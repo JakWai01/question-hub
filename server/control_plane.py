@@ -1,6 +1,7 @@
 from node import Node
 import time
 import logging
+from network import Message, OpCode
 
 class ControlPlane:
     def __init__(self):
@@ -49,11 +50,14 @@ class ControlPlane:
         return sorted(list(self._node_heartbeats))
 
     def make_leader(self, node: Node):
+        logging.info(f"Node {node.ip}:{node.port} has been appointed the new leader")
         if self.current_leader is not None:
             self.current_leader.leader = False
 
         node.leader = True
         self.current_leader = node
+        
+        
 
     # TODO: Only take node as an argument
     # TODO: One of those needs to be the own node
