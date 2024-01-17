@@ -8,7 +8,7 @@ class ControlPlane:
         self._nodes: set[Node] = set()
         self._node_heartbeats = {}
         self.current_leader: Node = None
-
+   
     @property
     def nodes(self):
         return self._nodes
@@ -43,7 +43,7 @@ class ControlPlane:
                 continue
 
     def get_leader(self) -> Node | None:
-        return cp.current_leader
+        return self.current_leader
 
     def get_nodes_sorted(self) -> list[Node]:
         return sorted(list(self._node_heartbeats))
@@ -55,5 +55,33 @@ class ControlPlane:
         node.leader = True
         self.current_leader = node
 
+    # TODO: Only take node as an argument
+    # TODO: One of those needs to be the own node
+    def get_next_neighbour(self, sender_node: Node):
+        sender_ring_index = self.get_nodes_sorted().index(f"{sender_node.ip}:{sender_node.port}")
+
+        if sender_ring_index < self.ring_index(self.node):
+            return self.right_neighbour(self.node)
+        else:
+            return self.left_neighbour(self.node)
+
+    # TODO: Only take node as an argument
+    def get_previous_neighbour(self, sender_node: Node):
+        sender_ring_index = self.get_nodes_sorted().index(f"{sender_node.ip}:{sender_node.port}")
+        
+        if sender_ring_index < self.ring_index(self.node):
+            return self.left_neighbour(self.node)
+        else:
+            return self.right_neighbour(self.node)
     
+    def ring_index(self, node: Node):
+        return self.get_nodes_sorted().index(f"{node.ip}:{node.port}")
+
+    def left_neighbour(self, node: Node):
+        left_neighbour = self.get_nodes_sorted()[(self.ring_index(node) - 1) % len(self.nodes)]
+        return self.get_node_from_socket(left_neighbour)
     
+    def right_neighbour(self, node: Node):
+        right_neighbour = self.get_nodes_sorted()[(self.ring_index(node) + 1) % len(self.nodes)]
+        return self.get_node_from_socket(right_neighbour)
+         

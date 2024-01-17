@@ -9,6 +9,7 @@ import socket
 from network import get_network_interface
 import api
 from network import Message, OpCode, INTERFACE
+from election import Election
 
 
 
@@ -26,23 +27,24 @@ def main():
     threads = []
     
     cp = control_plane.ControlPlane()
-    
     cp.node = node.Node(INTERFACE.ip.compressed, args.port, False)
-    print(cp.node)
-    # cp.register_node(node)
+    cp.register_node(cp.node)
+    cp.register_heartbeat(f"{cp.node.ip}:{cp.node.port}")
 
-    listener_thread = Thread(target=api.broadcast_target, args=(api.message_handler, cp))
+    election = Election(cp)
+
+    listener_thread = Thread(target=api.broadcast_target, args=(api.message_handler, cp, election))
     listener_thread.start()
     threads.append(listener_thread)
 
     uni_thread = Thread(
-        target=api.unicast_target, args=(api.message_handler, cp.node.port, cp)
+        target=api.unicast_target, args=(api.message_handler, cp.node.port, cp, election)
     )
     uni_thread.start()
     threads.append(uni_thread)
 
     heartbeat_thread = Thread(
-        target=api.heartbeat_target, args=(api.message_handler, args.delay, cp)
+        target=api.heartbeat_target, args=(api.message_handler, args.delay, cp, election)
     )
     heartbeat_thread.start()
     threads.append(heartbeat_thread)

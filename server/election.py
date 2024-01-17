@@ -19,6 +19,7 @@ class Election:
     def __init__(self, cp: ControlPlane):
         self.cp = cp
         self.received = {}
+       
     
     def initiate_election(self):
         logging.info("Starting a new election")
@@ -31,41 +32,16 @@ class Election:
 
         self.send_vote_to_neighbours(phase=-1, hop=1)
 
-  
-
     def send_vote_to_neighbours(self, phase: int | None = 0 , hop: int | None = 1):
         msg = ElectionData(self.cp.node.ip, self.cp.node.port, self.cp.node.port, hop, phase)
 
-        right_neighbour = self.right_neighbour(self.cp.node)
-        left_neighbour = self.left_neighbour(self.cp.node)
+        right_neighbour = self.cp.right_neighbour(self.cp.node)
+        left_neighbour = self.cp.left_neighbour(self.cp.node)
+
+        # TODO: We are missing the node state here
+        print(right_neighbour)
+        print(left_neighbour)
+        print(self.cp.nodes)
 
         for neighbour in [left_neighbour, right_neighbour]:
             Message(opcode=OpCode.ELECTION, port=self.cp.node.port, data=json.dumps(msg.__dict__)).send(neighbour.ip, neighbour.port)
-
-    def get_next_neighbour(self, node: Node, socket: str):
-        socket_ring_index = cp.get_nodes_sorted().index(socket)
-
-        if socket_ring_index < node.ring_index:
-            return node.left_neighbour
-        else:
-            return node.right_neighbour
-
-    def get_previous_neighbour(self, socket: str):
-        socket_ring_index = cp.get_nodes_sorted().index(socket)
-
-        if socket_ring_index < self.ring_index:
-            return self.right_neighbour
-        else:
-            return self.left_neighbour
-    
-    def ring_index(self, node: Node):
-        return self.cp.get_nodes_sorted().index(f"{node.ip}:{node.port}")
-
-    def left_neighbour(self, node: Node):
-        left_neighbour = self.cp.get_nodes_sorted()[(self.ring_index(node) - 1) % len(self.cp.nodes)]
-        return self.cp.get_node_from_socket(left_neighbour)
-    
-    def right_neighbour(self, node: Node):
-        right_neighbour = self.cp.get_nodes_sorted()[(self.ring_index(node) + 1) % len(self.cp.nodes)]
-        return self.cp.get_node_from_socket(right_neighbour)
-        
