@@ -111,6 +111,9 @@ def election_handler(message: Message, ip: str, cp: ControlPlane, election: Elec
     
     vote = ElectionData(gid=msg["gid"], leader_ip=msg["leader_ip"], leader_port=msg["leader_port"], leader_stat=msg["leader_stat"], hop=msg["hop"], phase=msg["phase"])
 
+    if vote.hop == 1 and vote.phase == 0:
+        time.sleep(1)
+
     # print(vote.__dict__)
 
     # Handle reply
