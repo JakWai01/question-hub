@@ -68,6 +68,10 @@ class ControlPlane:
             return self.get_node_from_socket(self.get_nodes_sorted()[len(self.get_nodes_sorted()) - 1])
         elif self.ring_index(self.node) == len(self.get_nodes_sorted()) - 1 and sender_ring_index != 0:
             return self.get_node_from_socket(self.get_nodes_sorted()[0])
+        elif self.ring_index(self.node) == 0 and sender_ring_index == len(self.get_nodes_sorted()) - 1:
+            return self.right_neighbour(self.node)
+        elif self.ring_index(self.node) == len(self.get_nodes_sorted()) - 1 and sender_ring_index == 0:
+            return self.left_neighbour(self.node)
         elif sender_ring_index < self.ring_index(self.node):
             return self.right_neighbour(self.node)
         else:
