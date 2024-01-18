@@ -62,7 +62,8 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election)
                     logging.info(f"Lost connection to node: {node.ip}:{node.port}")
                     new_hb_dict.pop(socket)
                     cp._node_heartbeats = new_hb_dict
-                    if node.leader is True and len(cp._node_heartbeats) > 1:
+                    
+                    if node.leader is True and len(cp._node_heartbeats) > 1 and str(cp.node.port) == str.split(max(cp._node_heartbeats), ":")[1]:
 
                         e = Election(cp)
                         e.initiate_election()
@@ -103,15 +104,14 @@ def message_handler(message: Message, ip: str, cp: ControlPlane, election: Elect
 
 def election_handler(message: Message, ip: str, cp: ControlPlane, election: Election):
     sender_socket = f"{ip}:{message.port}"
-
     next_neighbour = cp.get_next_neighbour(cp.get_node_from_socket(sender_socket))
-    previous_neighbour = cp.get_previous_neighbour(cp.get_node_from_socket(sender_socket))
-  
+    previous_neighbour = cp.get_node_from_socket(f"{ip}:{message.port}")
+
     msg = json.loads(message.data)
     
     vote = ElectionData(gid=msg["gid"], leader_ip=msg["leader_ip"], leader_port=msg["leader_port"], leader_stat=msg["leader_stat"], hop=msg["hop"], phase=msg["phase"])
 
-    print(vote.__dict__)
+    # print(vote.__dict__)
 
     # Handle reply
     if vote.hop is None:
@@ -124,7 +124,10 @@ def election_handler(message: Message, ip: str, cp: ControlPlane, election: Elec
             received = election.received.get(vote.gid, [])
             # TODO: Use socket instead
             if vote.leader_port in received:
-                # election.received = {}
+                # TODO: Why doesn't this work
+                print(f"Received before cleanup {election.received}")
+                election.received[vote.gid] = []
+                print(f"Received after cleanup {election.received}")
                 print("SENDING OUT NEXT PHASE")
                 election.send_vote_to_neighbours(gid=vote.gid, phase=vote.phase + 1, hop=1)
             else:
@@ -159,13 +162,17 @@ def hello_reply_handler(message: Message, ip: str, cp: ControlPlane, election: E
         cp.register_heartbeat(f"{node.ip}:{node.port}")
 
     cp.nodes.update(set(new_nodes))
-        
+
+    # If the election below gets dropped due to me not having the highest port, we don't have a leader if it was not declared previously
+    cp.current_leader = cp.get_node_from_socket(f"{ip}:{message.port}")
+
     e = Election(cp)
     e.initiate_election()
 
 def hello_handler(message: Message, ip: str, cp: ControlPlane, election: Election):
     cp.register_node(Node(ip, message.port))
 
+    print(f"Received hello, am I leader? {cp.node.leader}")
     if cp.current_leader == None or cp.node.leader == True:
         Message(
             opcode=OpCode.HELLO_REPLY,

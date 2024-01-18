@@ -64,19 +64,24 @@ class ControlPlane:
     def get_next_neighbour(self, sender_node: Node):
         sender_ring_index = self.get_nodes_sorted().index(f"{sender_node.ip}:{sender_node.port}")
 
-        if sender_ring_index < self.ring_index(self.node):
+        if self.ring_index(self.node) == 0 and sender_ring_index != len(self.get_nodes_sorted()) - 1:
+            return self.get_node_from_socket(self.get_nodes_sorted()[len(self.get_nodes_sorted()) - 1])
+        elif self.ring_index(self.node) == len(self.get_nodes_sorted()) - 1 and sender_ring_index != 0:
+            return self.get_node_from_socket(self.get_nodes_sorted()[0])
+        elif sender_ring_index < self.ring_index(self.node):
             return self.right_neighbour(self.node)
         else:
             return self.left_neighbour(self.node)
 
     # TODO: Only take node as an argument
-    def get_previous_neighbour(self, sender_node: Node):
-        sender_ring_index = self.get_nodes_sorted().index(f"{sender_node.ip}:{sender_node.port}")
+    # def get_previous_neighbour(self, sender_node: Node):
+    #     sender_ring_index = self.get_nodes_sorted().index(f"{sender_node.ip}:{sender_node.port}")
         
-        if sender_ring_index < self.ring_index(self.node):
-            return self.left_neighbour(self.node)
-        else:
-            return self.right_neighbour(self.node)
+    #     if 
+    #     if sender_ring_index < self.ring_index(self.node):
+    #         return self.left_neighbour(self.node)
+    #     else:
+    #         return self.right_neighbour(self.node)
     
     def ring_index(self, node: Node):
         return self.get_nodes_sorted().index(f"{node.ip}:{node.port}")
