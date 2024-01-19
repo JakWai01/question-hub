@@ -149,13 +149,8 @@ def election_handler(message: Message, ip: str, cp: ControlPlane, election: Elec
             if election.received.get(vote.gid) is None:
                 election.received[vote.gid] = []
             received = election.received.get(vote.gid, [])
-            # TODO: Use socket instead
             if vote.leader_port in received:
-                # TODO: Why doesn't this work
-                print(f"Received before cleanup {election.received}")
                 election.received[vote.gid] = []
-                print(f"Received after cleanup {election.received}")
-                print("SENDING OUT NEXT PHASE")
                 election.send_vote_to_neighbours(
                     gid=vote.gid, phase=vote.phase + 1, hop=1
                 )
@@ -224,7 +219,6 @@ def hello_reply_handler(
 def hello_handler(message: Message, ip: str, cp: ControlPlane, election: Election):
     cp.register_node(Node(ip, message.port))
 
-    print(f"Received hello, am I leader? {cp.node.leader}")
     if cp.current_leader == None or cp.node.leader == True:
         Message(
             opcode=OpCode.HELLO_REPLY,
