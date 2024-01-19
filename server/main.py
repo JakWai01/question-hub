@@ -1,16 +1,11 @@
 import argparse
-import json
-import time
 from threading import Thread
 import logging
 import node
 import control_plane
-import socket
-from network import get_network_interface
 import api
 from network import Message, OpCode, INTERFACE
 from election import Election
-
 
 
 def main():
@@ -25,7 +20,7 @@ def main():
     logging.basicConfig(level=args.loglevel)
 
     threads = []
-    
+
     cp = control_plane.ControlPlane()
     cp.node = node.Node(INTERFACE.ip.compressed, args.port, False)
     cp.register_node(cp.node)
@@ -33,18 +28,22 @@ def main():
 
     election = Election(cp)
 
-    listener_thread = Thread(target=api.broadcast_target, args=(api.message_handler, cp, election))
+    listener_thread = Thread(
+        target=api.broadcast_target, args=(api.message_handler, cp, election)
+    )
     listener_thread.start()
     threads.append(listener_thread)
 
     uni_thread = Thread(
-        target=api.unicast_target, args=(api.message_handler, cp.node.port, cp, election)
+        target=api.unicast_target,
+        args=(api.message_handler, cp.node.port, cp, election),
     )
     uni_thread.start()
     threads.append(uni_thread)
 
     heartbeat_thread = Thread(
-        target=api.heartbeat_target, args=(api.message_handler, args.delay, cp, election)
+        target=api.heartbeat_target,
+        args=(api.message_handler, args.delay, cp, election),
     )
     heartbeat_thread.start()
     threads.append(heartbeat_thread)

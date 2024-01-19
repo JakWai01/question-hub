@@ -1,4 +1,4 @@
-from enum import Enum, unique
+from enum import Enum
 from ipaddress import IPv4Interface
 import netifaces
 import json
@@ -6,6 +6,7 @@ import socket
 import logging
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
 
 def is_valid(address: str, broadcast: str | None):
     if not broadcast:
@@ -15,6 +16,7 @@ def is_valid(address: str, broadcast: str | None):
     if address == "127.0.0.1":
         return False
     return True
+
 
 def get_network_interface() -> IPv4Interface:
     for interface in reversed(netifaces.interfaces()):
@@ -26,12 +28,13 @@ def get_network_interface() -> IPv4Interface:
                 return IPv4Interface(f"{address}/{netmask}")
     raise Exception("Cannot find network interface to listen on")
 
-# hostname and network interface
+
 HOSTNAME = socket.gethostname()
 INTERFACE = get_network_interface()
 
 BROADCAST_PORT = 34567
 BROADCAST_IP = str(INTERFACE.network.broadcast_address)
+
 
 class OpCode(str, Enum):
     HELLO = "hello"
@@ -40,6 +43,7 @@ class OpCode(str, Enum):
     ELECTION_VOTE = "election_vote"
     ELECTION_REPLY = "election_reply"
     ELECTION_RESULT = "election_result"
+
 
 class Message:
     def __init__(
@@ -75,7 +79,7 @@ def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0):
 
     msg = json.loads(payload)
 
-    if msg['opcode'] != "heartbeat":
+    if msg["opcode"] != "heartbeat":
         logging.info(
             f"Sending message of type {msg['opcode']} to {address[0]}:{address[1]}"
         )

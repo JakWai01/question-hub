@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+
 @dataclass
 class Node:
     ip: str
@@ -14,4 +15,3 @@ class Node:
 
     def __hash__(cls):
         return hash(f"{cls.ip}:{cls.port}")
-

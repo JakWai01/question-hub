@@ -1,7 +1,7 @@
 from node import Node
 import time
 import logging
-from network import Message, OpCode
+
 
 class ControlPlane:
     def __init__(self):
@@ -9,7 +9,7 @@ class ControlPlane:
         self._nodes: set[Node] = set()
         self._node_heartbeats = {}
         self.current_leader: Node = None
-   
+
     @property
     def nodes(self):
         return self._nodes
@@ -24,12 +24,12 @@ class ControlPlane:
     @property
     def node(self):
         return self._node
-    
+
     @node.setter
     def node(self, node: Node):
         self._node = node
 
-    def register_node(self, node: Node): 
+    def register_node(self, node: Node):
         self._nodes.add(node)
 
     def remove_node(self, node: Node):
@@ -56,45 +56,50 @@ class ControlPlane:
 
         node.leader = True
         self.current_leader = node
-        
-        
 
-    # TODO: Only take node as an argument
-    # TODO: One of those needs to be the own node
     def get_next_neighbour(self, sender_node: Node):
-        sender_ring_index = self.get_nodes_sorted().index(f"{sender_node.ip}:{sender_node.port}")
+        sender_ring_index = self.get_nodes_sorted().index(
+            f"{sender_node.ip}:{sender_node.port}"
+        )
 
-        if self.ring_index(self.node) == 0 and sender_ring_index != len(self.get_nodes_sorted()) - 1:
-            return self.get_node_from_socket(self.get_nodes_sorted()[len(self.get_nodes_sorted()) - 1])
-        elif self.ring_index(self.node) == len(self.get_nodes_sorted()) - 1 and sender_ring_index != 0:
+        if (
+            self.ring_index(self.node) == 0
+            and sender_ring_index != len(self.get_nodes_sorted()) - 1
+        ):
+            return self.get_node_from_socket(
+                self.get_nodes_sorted()[len(self.get_nodes_sorted()) - 1]
+            )
+        elif (
+            self.ring_index(self.node) == len(self.get_nodes_sorted()) - 1
+            and sender_ring_index != 0
+        ):
             return self.get_node_from_socket(self.get_nodes_sorted()[0])
-        elif self.ring_index(self.node) == 0 and sender_ring_index == len(self.get_nodes_sorted()) - 1:
+        elif (
+            self.ring_index(self.node) == 0
+            and sender_ring_index == len(self.get_nodes_sorted()) - 1
+        ):
             return self.right_neighbour(self.node)
-        elif self.ring_index(self.node) == len(self.get_nodes_sorted()) - 1 and sender_ring_index == 0:
+        elif (
+            self.ring_index(self.node) == len(self.get_nodes_sorted()) - 1
+            and sender_ring_index == 0
+        ):
             return self.left_neighbour(self.node)
         elif sender_ring_index < self.ring_index(self.node):
             return self.right_neighbour(self.node)
         else:
             return self.left_neighbour(self.node)
 
-    # TODO: Only take node as an argument
-    # def get_previous_neighbour(self, sender_node: Node):
-    #     sender_ring_index = self.get_nodes_sorted().index(f"{sender_node.ip}:{sender_node.port}")
-        
-    #     if 
-    #     if sender_ring_index < self.ring_index(self.node):
-    #         return self.left_neighbour(self.node)
-    #     else:
-    #         return self.right_neighbour(self.node)
-    
     def ring_index(self, node: Node):
         return self.get_nodes_sorted().index(f"{node.ip}:{node.port}")
 
     def left_neighbour(self, node: Node):
-        left_neighbour = self.get_nodes_sorted()[(self.ring_index(node) - 1) % len(self.nodes)]
+        left_neighbour = self.get_nodes_sorted()[
+            (self.ring_index(node) - 1) % len(self.nodes)
+        ]
         return self.get_node_from_socket(left_neighbour)
-    
+
     def right_neighbour(self, node: Node):
-        right_neighbour = self.get_nodes_sorted()[(self.ring_index(node) + 1) % len(self.nodes)]
+        right_neighbour = self.get_nodes_sorted()[
+            (self.ring_index(node) + 1) % len(self.nodes)
+        ]
         return self.get_node_from_socket(right_neighbour)
-         
