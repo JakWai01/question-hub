@@ -43,6 +43,11 @@ class OpCode(str, Enum):
     ELECTION_VOTE = "election_vote"
     ELECTION_REPLY = "election_reply"
     ELECTION_RESULT = "election_result"
+    QUESTION_REQUEST = "question_request"
+    QUESTION = "question"
+    VOTE_REQUEST = "vote_request"
+    VOTE = "vote"
+    APPLICATIONS_STATE = "application_state"
 
 
 class Message:

@@ -8,7 +8,47 @@ from node import Node
 from election import Election
 import json
 from election import ElectionData
+from application_state import ApplicationState, Question, Vote
 
+def application_state_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
+    msg = json.loads(message.data)
+
+    print(msg)
+
+# Vote for an existing question. If the leader does not know about the question, the question does not exist. 
+# Each question is assigned a unique UUID for identification purposes
+def vote_request_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
+    msg = json.loads(message.data)
+    question = app_state.get_question_from_uuid(msg.uuid)
+
+    vote = Vote(msg.socket, msg.uuid)
+
+    question.toggle_vote(vote)
+    Message(opcode=OpCode.VOTE, port=cp.node.port, data=json.dumps(vote.__dict__)).broadcast()
+
+# Since only the leader handles the request, the other servers also need to receive the update. This happens via the broadcast.
+def vote_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
+    msg = json.loads(message.data)
+    question = app_state.get_question_from_uuid(msg.uuid)
+
+    vote = Vote(msg.socket, msg.uuid)
+
+    question.toggle_vote(vote)
+
+# Post a new question to the application
+def question_request_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
+    msg = json.loads(message.data)
+    
+    question = Question(msg.text)
+    app_state.add_question(question)
+
+    Message(opcode=OpCode.QUESTION, port=cp.node.port, data=json.dumps(question.__dict__)).broadcast()
+
+def question_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
+    msg = json.loads(message.data)
+    
+    question = Question(msg.text)
+    app_state.add_question(question)
 
 def heartbeat_handler(message: Message, ip: str, cp: ControlPlane, election: Election):
     cp.register_heartbeat(f"{ip}:{message.port}")
@@ -91,7 +131,7 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election)
         exit(0)
 
 
-def message_handler(message: Message, ip: str, cp: ControlPlane, election: Election):
+def message_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
     if ip == cp.node.ip and message.port == cp.node.port:
         return
 
@@ -103,7 +143,7 @@ def message_handler(message: Message, ip: str, cp: ControlPlane, election: Elect
     if message.opcode is OpCode.HELLO:
         hello_handler(message, ip, cp, election)
     elif message.opcode is OpCode.HELLO_REPLY:
-        hello_reply_handler(message, ip, cp, election)
+        hello_reply_handler(message, ip, cp, election, app_state)
     elif message.opcode is OpCode.HEARTBEAT:
         heartbeat_handler(message, ip, cp, election)
     elif (
@@ -113,6 +153,16 @@ def message_handler(message: Message, ip: str, cp: ControlPlane, election: Elect
         election_handler(message, ip, cp, election)
     elif message.opcode is OpCode.ELECTION_RESULT:
         election_result_handler(message, ip, cp, election)
+    elif message.opcode is OpCode.QUESTION_REQUEST:
+        question_request_handler(message, ip, cp, election, app_state)
+    elif message.opcode is OpCode.VOTE_REQUEST:
+        vote_request_handler(message, ip, cp, election, app_state)
+    elif message.opcode is OpCode.VOTE:
+        vote_handler(message, ip, cp, election, app_state)
+    elif message.opcode is OpCode.QUESTION:
+        question_handler(message, ip, cp, election, app_state)
+    elif message.opcode is OpCode.APPLICATION_STATE:
+        application_state_handler(message, ip, cp, election, app_state)
     else:
         return
 
@@ -216,7 +266,7 @@ def hello_reply_handler(
     e.initiate_election()
 
 
-def hello_handler(message: Message, ip: str, cp: ControlPlane, election: Election):
+def hello_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
     cp.register_node(Node(ip, message.port))
 
     if cp.current_leader == None or cp.node.leader == True:
@@ -225,3 +275,8 @@ def hello_handler(message: Message, ip: str, cp: ControlPlane, election: Electio
             port=cp.node.port,
             data=list(map(lambda node: node.__dict__, cp.nodes)),
         ).send(ip, message.port)
+        Message (
+            opcode = OpCode.APPLICATIONS_STATE,
+            port=cp.node.port,
+            data=json.dumps(app_state.__dict__)
+        )
