@@ -1,9 +1,10 @@
-.PHONY: server client run
+.PHONY: server client
 
 server:
 	python ./server/main.py
 
 client:
+<<<<<<< HEAD
 	python ./client/main.py
 
 build:
@@ -11,3 +12,6 @@ build:
 
 run:
 	docker-compose up --scale server=2 --scale client=1
+=======
+	python ./client/main.py
+>>>>>>> main

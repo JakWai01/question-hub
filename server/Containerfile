@@ -1,8 +1,0 @@
-FROM python:3.12
-
-WORKDIR /app
-
-COPY ./server/main.py .
-RUN pip install netifaces
-
-EXPOSE 8000
