@@ -7,5 +7,5 @@
 </template>
 
 <script setup>
-  import Questions from '@/components/questions.vue'
+  import Questions from '@/components/Questions.vue'
 </script>
