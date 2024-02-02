@@ -41,12 +41,12 @@ def find_available_port(start_port, max_attempts=10):
 
     raise Exception(f"Could not find an available port in the range {start_port} to {start_port + max_attempts}")    
 
-# GET API
+# GET All Questions
 @app.route('/api/get', methods=['GET'])
 def get_data():
     return jsonify(data)
 
-# POST API
+# Vote Up
 @app.route('/api/vote_up', methods=['POST'])
 def change_order():
     try:
@@ -65,6 +65,30 @@ def change_order():
 
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 400
+
+# Add New Question
+@app.route('/api/add_question', methods=['POST'])
+def add_question():
+    try:
+        # Get the data from the request
+        data_json = request.get_json()
+
+        # Create a new question
+        new_question = {
+            'id': data[-1]['id'] + 1,
+            'title': data_json['title'],
+            'message': data_json['message'],
+            'order': 0,
+        }
+
+        # Append the new question to the data array
+        data.append(new_question)
+
+        # Return a simple "OK" message
+        return jsonify({'success': True, 'message': 'Question added successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 
 if __name__ == '__main__':
     host = '127.0.0.1'
