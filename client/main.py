@@ -14,6 +14,24 @@ from threading import Thread
 from dataclasses import dataclass
 
 sock = network.sock
+import http.server
+import socketserver
+import socket
+import threading
+import netifaces
+from ipaddress import IPv4Interface
+
+# HTTP server to handle web client requests
+class MyHttpRequestHandler(http.server.SimpleHTTPRequestHandler):
+    pass
+
+def http_server():
+    PORT = 8000
+    Handler = MyHttpRequestHandler
+
+    with socketserver.TCPServer(("localhost", PORT), Handler) as httpd:
+        print("HTTP server started on port", PORT)
+        httpd.serve_forever()
 
 # hostname and network interface
 HOSTNAME = network.HOSTNAME
@@ -76,9 +94,15 @@ def main():
     uni_thread.start()
     print("uni_thread with", args.port, "started")
     threads.append(uni_thread)
+
+    # Start the HTTP server in a separate thread
+    http_thread = threading.Thread(target=http_server)
+    http_thread.start()
+    threads.append(http_thread)
     
     network.Message(network.OpCode.HELLO, port=args.port).broadcast(2)
     print("broadcast sent")
+
 
     for thread in threads:
         thread.join()
