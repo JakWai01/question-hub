@@ -13,13 +13,16 @@ from enum import Enum, unique
 from threading import Thread
 from dataclasses import dataclass
 
-sock = network.sock
 import http.server
 import socketserver
 import socket
 import threading
 import netifaces
 from ipaddress import IPv4Interface
+
+#serversock
+sock = network.sock
+#httpsock
 
 # HTTP server to handle web client requests
 class MyHttpRequestHandler(http.server.SimpleHTTPRequestHandler):

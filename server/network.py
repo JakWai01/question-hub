@@ -39,6 +39,9 @@ BROADCAST_IP = str(INTERFACE.network.broadcast_address)
 class OpCode(str, Enum):
     HELLO = "hello"
     HELLO_REPLY = "hello_reply"
+    HELLO_SERVER = "hello_server"
+    HELLO_CLIENT = "hello_client"
+#     TRANSPORT = "transport"
     HEARTBEAT = "heartbeat"
     ELECTION_VOTE = "election_vote"
     ELECTION_REPLY = "election_reply"
