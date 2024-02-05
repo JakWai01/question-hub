@@ -51,7 +51,7 @@ def find_available_port(start_port, max_attempts=10):
 def get_data():
     app_state = app.config["application_state"]
 
-    return json.dumps(app_state.questions, default = lambda x: x.__dict__)
+    return json.dumps(app_state.questions, default = lambda x: {"uuid": x.uuid, "text": x.text, "votes": len(x.votes)})
 
 # Vote Up
 @app.route('/api/vote_up', methods=['POST'])

@@ -37,7 +37,7 @@
               </div>
 
               <v-expansion-panel-title expand-icon="mdi-menu-down">
-                {{ question.title }}
+                {{ question.text }}
               </v-expansion-panel-title>
 
             </div>
@@ -70,7 +70,8 @@ const fetchData = async () => {
     const response = await fetch(`${flaskIP.value}/get`);
     const result = await response.json();
     // Update questions on creation of componenet
-    questions.value = result.sort((a, b) => b.order - a.order);
+    console.log(result)
+    questions.value = result.sort((a, b) => b.votes - a.votes);
   } catch (error) {
     console.error('Error fetching data:', error);
   }
