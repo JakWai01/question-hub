@@ -35,16 +35,8 @@ class Question:
 
 
 class ApplicationState:
-    def __init__(self):
-        self._questions: list[Question] = None
-
-    @property 
-    def questions(self):
-        return self._questions
-    
-    @questions.setter
-    def questions(self, new_questions: list[Question]):
-        self._questions = new_questions
+    def __init__(self, questions: list[Question] = []):
+        self.questions: list[Question] = questions
 
     def get_question_from_uuid(self, uuid: str) -> Question | None:
         for question in self.questions:
@@ -53,7 +45,7 @@ class ApplicationState:
         return None
 
     def add_question(self, question: Question):
-        self.questions.insert(question)
+        self.questions.append(question)
 
     def get_application_state(self):
         return self.__dict__

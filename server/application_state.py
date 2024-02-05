@@ -35,8 +35,9 @@ class Question:
 
 
 class ApplicationState:
-    questions: list[Question]
-
+    def __init__(self, questions: list[Question] = []):
+        self.questions: list[Question] = questions
+    
     def get_question_from_uuid(self, uuid: str) -> Question | None:
         for question in self.questions:
             if question.uuid == uuid:
@@ -44,7 +45,7 @@ class ApplicationState:
         return None
 
     def add_question(self, question: Question):
-        self.questions.insert(question)
+        self.questions.append(question)
 
     def get_application_state(self):
         return self.__dict__

@@ -40,6 +40,9 @@ class OpCode(str, Enum):
     HELLO_SERVER = "hello_server"
     HELLO_REPLY = "hello_reply"
     HEARTBEAT = "heartbeat"
+    VOTE_REQUEST = "vote_request"
+    QUESTION_REQUEST = "question_request"
+    QUESTION = "question"
 
 class Message:
     def __init__(
@@ -80,4 +83,5 @@ def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0):
             f"Sending message of type {msg['opcode']} to {address[0]}:{address[1]}"
         )
 
+    print(address)
     sock.sendto(payload, address)

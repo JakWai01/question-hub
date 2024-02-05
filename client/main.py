@@ -6,7 +6,7 @@ from threading import Thread
 import logging
 from network import Message, INTERFACE, BROADCAST_PORT, OpCode
 import argparse
-from application_state import ApplicationState
+from application_state import ApplicationState, Question
 
 app = Flask(__name__)
 
@@ -80,25 +80,37 @@ def add_question():
 
         # Create a new question
         new_question = {
-            'id': data[-1]['id'] + 1,
-            'title': data_json['title'],
-            'message': data_json['message'],
-            'order': 0,
+            'text': data_json['title'],
         }
 
         # Append the new question to the data array
         data.append(new_question)
+        cp = app.config["cp"]
+
+        # TODO: Send message to server
+        print(f"{cp.leader_ip}:{cp.leader_port}")
+        Message(opcode=OpCode.QUESTION_REQUEST, port=cp.port, data=json.dumps(new_question)).send(cp.leader_ip, cp.leader_port)
 
         # Return a simple "OK" message
         return jsonify({'success': True, 'message': 'Question added successfully'})
     except Exception as e:
+        print(e)
         return jsonify({'success': False, 'message': str(e)}), 500
 
-def http_target(host, port, application_state: ApplicationState):
+class ControlPlane:
+    def __init__(self, leader_ip, leader_port, ip, port):
+        self.leader_ip = leader_ip
+        self.leader_port = leader_port
+        self.ip = ip  
+        self.port = port 
+
+def http_target(host, port, application_state: ApplicationState, cp: ControlPlane):
     print(f"Server running on http://{host}:{port}/")
+    app.config["cp"] = cp
+    app.config['application_state'] = application_state
     app.run(host=host, port=port, debug=True, use_reloader=False)
 
-def broadcast_target(callback, application_state: ApplicationState):
+def broadcast_target(callback, application_state: ApplicationState, cp: ControlPlane):
     listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -112,12 +124,12 @@ def broadcast_target(callback, application_state: ApplicationState):
 
                 logging.debug(f"Broadcast message received: {msg.opcode}")
 
-                callback(msg, ip, application_state)
+                callback(msg, ip, application_state, cp)
     except KeyboardInterrupt:
         listen_socket.close()
         exit(0)
 
-def unicast_target(callback, lport: int, application_state: ApplicationState):
+def unicast_target(callback, lport: int, application_state: ApplicationState, cp: ControlPlane):
     listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listen_socket.bind((INTERFACE.ip.compressed, lport))
 
@@ -127,21 +139,33 @@ def unicast_target(callback, lport: int, application_state: ApplicationState):
             if data:
                 msg = Message.unmarshal(data)
                 logging.debug(f"Unicast message received: {msg.opcode}")
-                callback(msg, ip, application_state)
+                callback(msg, ip, application_state, cp)
     except KeyboardInterrupt:
         listen_socket.close()
         exit(0)
 
 # Set current application state to the application state received by the server
-def hello_reply_handler(message, ip, application_state):
+def hello_reply_handler(message, ip, application_state, cp: ControlPlane):
+    print(f"Received this message data in hello reply {message.data}")
     app_state = json.loads(message.data, object_hook=lambda d: ApplicationState(**d))
     application_state.questions = app_state.questions
+
+    cp.leader_ip = ip      
+    cp.leader_port = message.port
+
     print("Received hello reply")
-    
-def message_handler(message: Message, ip: str, application_state: ApplicationState):
+
+def question_handler(message, ip, application_state, cp: ControlPlane):
+    msg = json.loads(message.data)
+    application_state.add_question(Question(msg["text"]))
+    print(f"Added question {msg['text']} to application state")
+
+def message_handler(message: Message, ip: str, application_state: ApplicationState, cp: ControlPlane):
     if message.opcode is OpCode.HELLO_REPLY:
         # TODO: the leader is implicitely the node we received the message from
-        hello_reply_handler(message, ip, application_state)
+        hello_reply_handler(message, ip, application_state, cp)
+    elif message.opcode is OpCode.QUESTION:
+        question_handler(message, ip, application_state, cp)
     else:
         return  
     
@@ -160,16 +184,17 @@ if __name__ == '__main__':
     threads = []
 
     application_state = ApplicationState()
+    cp = ControlPlane(None, None, INTERFACE.ip.compressed, args.port)
 
-    http_thread = Thread(target=http_target, args=(host, http_port, application_state))
+    http_thread = Thread(target=http_target, args=(host, http_port, application_state, cp))
     threads.append(http_thread)
     http_thread.start()
 
-    broadcast_thread = Thread(target=broadcast_target, args=(message_handler, application_state))
+    broadcast_thread = Thread(target=broadcast_target, args=(message_handler, application_state, cp))
     threads.append(broadcast_thread)
     broadcast_thread.start()
 
-    unicast_thread = Thread(target=unicast_target, args=(message_handler, args.port, application_state))
+    unicast_thread = Thread(target=unicast_target, args=(message_handler, args.port, application_state, cp))
     threads.append(unicast_thread)
     unicast_thread.start()
 

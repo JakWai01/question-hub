@@ -38,8 +38,9 @@ def vote_handler(message: Message, ip: str, cp: ControlPlane, election: Election
 # Post a new question to the application
 def question_request_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
     msg = json.loads(message.data)
-    
-    question = Question(msg.text)
+
+    print(f"Received msg: {msg}") 
+    question = Question(msg["text"])
     app_state.add_question(question)
 
     Message(opcode=OpCode.QUESTION, port=cp.node.port, data=json.dumps(question.__dict__)).broadcast()
@@ -91,7 +92,7 @@ def unicast_target(callback, lport: int, cp: ControlPlane, election: Election, a
             if data:
                 msg = Message.unmarshal(data)
                 logging.debug(f"Unicast message received: {msg.opcode}")
-                callback(msg, ip, cp, election)
+                callback(msg, ip, cp, election, app_state)
     except KeyboardInterrupt:
         listen_socket.close()
         exit(0)
@@ -133,7 +134,9 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election,
 # Send application state
 def hello_server_handler(message, ip, cp, election, app_state): 
     application_state = app_state.get_application_state()
-    Message(opcode=OpCode.HELLO_REPLY, port=cp.node.port, data=json.dumps(application_state)).send(ip, message.port)
+
+    if cp.current_leader == None or cp.node.leader == True:
+        Message(opcode=OpCode.HELLO_REPLY, port=cp.node.port, data=json.dumps(application_state)).send(ip, message.port)
 
 def message_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
     if ip == cp.node.ip and message.port == cp.node.port:
