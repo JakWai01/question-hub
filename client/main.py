@@ -3,7 +3,7 @@ from flask_cors import CORS
 import socket
 from threading import Thread
 import logging
-from network import Message, INTERFACE, BROADCAST_PORT
+from network import Message, INTERFACE, BROADCAST_PORT, OpCode
 import argparse
 
 app = Flask(__name__)
@@ -131,7 +131,10 @@ def unicast_target(callback, lport: int):
         exit(0)
 
 def message_handler(message: Message, ip: str):
-    pass
+    if message.opcode is OpCode.HELLO_REPLY:
+        pass
+    else:
+        return  
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog="Client")
@@ -159,7 +162,7 @@ if __name__ == '__main__':
     threads.append(unicast_thread)
     unicast_thread.start()
 
-    # TODO: Send Hello message from client
+    Message(OpCode.HELLO_SERVER, port=args.port).broadcast(2)
 
     for thread in threads:
         thread.join()

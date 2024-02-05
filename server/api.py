@@ -130,6 +130,9 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election,
     except KeyboardInterrupt:
         exit(0)
 
+def hello_server_handler(message, ip, cp, election): 
+    print("Hello server handler")
+    pass
 
 def message_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
     if ip == cp.node.ip and message.port == cp.node.port:
@@ -142,6 +145,8 @@ def message_handler(message: Message, ip: str, cp: ControlPlane, election: Elect
 
     if message.opcode is OpCode.HELLO:
         hello_handler(message, ip, cp, election)
+    elif message.opcode is OpCode.HELLO_SERVER:
+        hello_server_handler(message, ip, cp, election)
     elif message.opcode is OpCode.HELLO_REPLY:
         hello_reply_handler(message, ip, cp, election, app_state)
     elif message.opcode is OpCode.HEARTBEAT:
