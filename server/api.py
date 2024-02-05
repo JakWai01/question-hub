@@ -61,7 +61,7 @@ def election_result_handler(
     cp.make_leader(node)
 
 
-def broadcast_target(callback, cp: ControlPlane, election: Election):
+def broadcast_target(callback, cp: ControlPlane, election: Election, app_state: ApplicationState):
     listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -75,13 +75,13 @@ def broadcast_target(callback, cp: ControlPlane, election: Election):
 
                 logging.debug(f"Broadcast message received: {msg.opcode}")
 
-                callback(msg, ip, cp, election)
+                callback(msg, ip, cp, election, app_state)
     except KeyboardInterrupt:
         listen_socket.close()
         exit(0)
 
 
-def unicast_target(callback, lport: int, cp: ControlPlane, election: Election):
+def unicast_target(callback, lport: int, cp: ControlPlane, election: Election, app_state: ApplicationState):
     listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listen_socket.bind((INTERFACE.ip.compressed, lport))
 
@@ -97,7 +97,7 @@ def unicast_target(callback, lport: int, cp: ControlPlane, election: Election):
         exit(0)
 
 
-def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election):
+def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election, app_state: ApplicationState):
     try:
         while True:
             new_hb_dict = cp._node_heartbeats.copy()

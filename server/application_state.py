@@ -1,5 +1,4 @@
 import uuid
-import logging
 
 class Vote:
     socket: str
@@ -9,10 +8,13 @@ class Vote:
         self.socket = socket
         self.question_uuid = question_uuid
 
+    # def __iter__(self):
+    #     return iter(self)
+
 class Question:
     uuid: str
     text: str
-    votes: list(Vote)
+    votes: list[Vote]
 
     def __init__(self, text):
         self.text = text
@@ -36,7 +38,7 @@ class Question:
 
 
 class ApplicationState:
-    questions: list(Question)
+    questions: list[Question]
 
     def get_question_from_uuid(self, uuid: str) -> Question | None:
         for question in self.questions:

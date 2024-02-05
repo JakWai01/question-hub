@@ -4,6 +4,7 @@ import socket
 from threading import Thread
 import logging
 from network import Message, INTERFACE, BROADCAST_PORT
+import argparse
 
 app = Flask(__name__)
 
@@ -129,22 +130,32 @@ def unicast_target(callback, lport: int):
         listen_socket.close()
         exit(0)
 
-
+def message_handler(message: Message, ip: str):
+    pass
+    
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(prog="Client")
+
+    parser.add_argument("--port", default="3678", type=int)
+    parser.add_argument("--loglevel", default="INFO", type=str)
+
+    args = parser.parse_args()
+    logging.basicConfig(level=args.loglevel)
+
     host = '127.0.0.1'
-    port = find_available_port(start_port=5000)
+    http_port = find_available_port(start_port=5000)
 
     threads = []
 
-    http_thread = Thread(target=http_target, args=(host, port))
+    http_thread = Thread(target=http_target, args=(host, http_port))
     threads.append(http_thread)
     http_thread.start()
 
-    broadcast_thread = Thread(target=broadcast_target)
+    broadcast_thread = Thread(target=broadcast_target, args=(message_handler,))
     threads.append(broadcast_thread)
     broadcast_thread.start()
 
-    unicast_thread = Thread(target=unicast_target)
+    unicast_thread = Thread(target=unicast_target, args=(message_handler, args.port,))
     threads.append(unicast_thread)
     unicast_thread.start()
 

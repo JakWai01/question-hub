@@ -6,7 +6,7 @@ import control_plane
 import api
 from network import Message, OpCode, INTERFACE
 from election import Election
-
+from application_state import ApplicationState
 
 def main():
     parser = argparse.ArgumentParser(prog="Server")
@@ -28,22 +28,24 @@ def main():
 
     election = Election(cp)
 
+    app_state = ApplicationState()
+
     listener_thread = Thread(
-        target=api.broadcast_target, args=(api.message_handler, cp, election)
+        target=api.broadcast_target, args=(api.message_handler, cp, election, app_state)
     )
     listener_thread.start()
     threads.append(listener_thread)
 
     uni_thread = Thread(
         target=api.unicast_target,
-        args=(api.message_handler, cp.node.port, cp, election),
+        args=(api.message_handler, cp.node.port, cp, election, app_state),
     )
     uni_thread.start()
     threads.append(uni_thread)
 
     heartbeat_thread = Thread(
         target=api.heartbeat_target,
-        args=(api.message_handler, args.delay, cp, election),
+        args=(api.message_handler, args.delay, cp, election, app_state),
     )
     heartbeat_thread.start()
     threads.append(heartbeat_thread)
