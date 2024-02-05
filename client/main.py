@@ -49,7 +49,9 @@ def find_available_port(start_port, max_attempts=10):
 # GET All Questions
 @app.route('/api/get', methods=['GET'])
 def get_data():
-    return jsonify(data)
+    app_state = app.config["application_state"]
+
+    return json.dumps(app_state.questions, default = lambda x: x.__dict__)
 
 # Vote Up
 @app.route('/api/vote_up', methods=['POST'])
