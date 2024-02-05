@@ -132,7 +132,8 @@ def unicast_target(callback, lport: int):
 
 def message_handler(message: Message, ip: str):
     if message.opcode is OpCode.HELLO_REPLY:
-        pass
+        # TODO: the leader is implicitely the node we received the message from
+        print(message.data)
     else:
         return  
     

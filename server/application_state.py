@@ -50,4 +50,4 @@ class ApplicationState:
         self.questions.insert(question)
 
     def get_application_state(self):
-        return self.__dict__()
+        return self.__dict__
