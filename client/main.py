@@ -6,7 +6,7 @@ from threading import Thread
 import logging
 from network import Message, INTERFACE, BROADCAST_PORT, OpCode
 import argparse
-from application_state import ApplicationState, Question
+from application_state import ApplicationState, Question, Vote
 
 app = Flask(__name__)
 
@@ -58,19 +58,32 @@ def get_data():
 def change_order():
     try:
         # Get the id from the request
-        message_id = int(request.json['id'])
+        print(request.data)
+        question_id = int(request.json['uuid'])
 
         # Find the message with the given id
-        message = next((item for item in data if item['id'] == message_id), None)
+        # message = next((item for item in data if item['id'] == message_id), None)
+        
+        # # Update the order if the message is found
+        # if message:
+        #     message['order'] += 1  # Increment the order by 1
+        #     return jsonify({'success': True, 'message': 'Order updated successfully'})
+        # else:
+        #     return jsonify({'success': False, 'message': 'Message not found'})
+        application_state = app.config["application-state"]
 
-        # Update the order if the message is found
-        if message:
-            message['order'] += 1  # Increment the order by 1
-            return jsonify({'success': True, 'message': 'Order updated successfully'})
-        else:
-            return jsonify({'success': False, 'message': 'Message not found'})
+        print(f"Target Question ID {question_id}")
+        for question in application_state.questions:
+            print(f"Current question_id {question.uuid}")
+            if question.uuid == question_id:
+                print(f"Request sid: {request.sid}")
+                question.toggle_vote(Vote(question_uuid=question_id, socket=request.sid)) 
+                return jsonify({'success': True, 'message': 'Voted successfully'})
+            else:
+                return jsonify({'success': False, 'message': 'Question not found'})
 
     except Exception as e:
+        print(e)
         return jsonify({'success': False, 'message': str(e)}), 400
 
 # Add New Question
@@ -82,7 +95,7 @@ def add_question():
 
         # Create a new question
         new_question = {
-            'text': data_json['title'],
+            'text': data_json['text'],
         }
 
         # Append the new question to the data array

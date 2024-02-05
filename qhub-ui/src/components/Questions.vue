@@ -12,8 +12,7 @@
           </v-card-title>
           <v-card-text>
             <!-- Form fields -->
-            <v-text-field v-model="title" label="Title"></v-text-field>
-            <v-textarea v-model="message" label="Message"></v-textarea>
+            <v-text-field v-model="text" label="Title"></v-text-field>
           </v-card-text>
           <v-card-actions>
             <!-- Buttons to submit or cancel the form -->
@@ -62,8 +61,7 @@ import { ref, onMounted } from 'vue'
 const questions = ref([])
 const flaskIP = ref('http://localhost:5000/api')
 const formDialogVisible = ref(false);
-const title = ref('');
-const message = ref('');
+const text = ref('');
 
 const fetchData = async () => {
   try {
@@ -85,7 +83,8 @@ const voteUp = async (questionId) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        id: questionId,
+        // TODO: QuestionID is null
+        uuid: questionId,
       }),
     });
 
@@ -112,8 +111,7 @@ const addQuestion = async () => {
   try {
     // Create the request body
     const requestBody = {
-      title: title.value,
-      message: message.value,
+      text: text.value,
     };
 
     // Send a POST request to the server using fetch
@@ -143,8 +141,7 @@ const addQuestion = async () => {
 
 const closeFormDialog = () => {
   // Show the form dialog
-  title.value = '';
-  message.value = '';
+  text.value = '';
   formDialogVisible.value = false;
 };
 
