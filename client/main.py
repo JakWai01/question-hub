@@ -1,3 +1,4 @@
+import json
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import socket
@@ -5,6 +6,7 @@ from threading import Thread
 import logging
 from network import Message, INTERFACE, BROADCAST_PORT, OpCode
 import argparse
+from application_state import ApplicationState
 
 app = Flask(__name__)
 
@@ -92,11 +94,11 @@ def add_question():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
-def http_target(host, port):
+def http_target(host, port, application_state: ApplicationState):
     print(f"Server running on http://{host}:{port}/")
     app.run(host=host, port=port, debug=True, use_reloader=False)
 
-def broadcast_target(callback):
+def broadcast_target(callback, application_state: ApplicationState):
     listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -110,12 +112,12 @@ def broadcast_target(callback):
 
                 logging.debug(f"Broadcast message received: {msg.opcode}")
 
-                callback(msg, ip)
+                callback(msg, ip, application_state)
     except KeyboardInterrupt:
         listen_socket.close()
         exit(0)
 
-def unicast_target(callback, lport: int):
+def unicast_target(callback, lport: int, application_state: ApplicationState):
     listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listen_socket.bind((INTERFACE.ip.compressed, lport))
 
@@ -125,15 +127,21 @@ def unicast_target(callback, lport: int):
             if data:
                 msg = Message.unmarshal(data)
                 logging.debug(f"Unicast message received: {msg.opcode}")
-                callback(msg, ip)
+                callback(msg, ip, application_state)
     except KeyboardInterrupt:
         listen_socket.close()
         exit(0)
 
-def message_handler(message: Message, ip: str):
+# Set current application state to the application state received by the server
+def hello_reply_handler(message, ip, application_state):
+    app_state = json.loads(message.data, object_hook=lambda d: ApplicationState(**d))
+    application_state.questions = app_state.questions
+    print("Received hello reply")
+    
+def message_handler(message: Message, ip: str, application_state: ApplicationState):
     if message.opcode is OpCode.HELLO_REPLY:
         # TODO: the leader is implicitely the node we received the message from
-        print(message.data)
+        hello_reply_handler(message, ip, application_state)
     else:
         return  
     
@@ -151,15 +159,17 @@ if __name__ == '__main__':
 
     threads = []
 
-    http_thread = Thread(target=http_target, args=(host, http_port))
+    application_state = ApplicationState()
+
+    http_thread = Thread(target=http_target, args=(host, http_port, application_state))
     threads.append(http_thread)
     http_thread.start()
 
-    broadcast_thread = Thread(target=broadcast_target, args=(message_handler,))
+    broadcast_thread = Thread(target=broadcast_target, args=(message_handler, application_state))
     threads.append(broadcast_thread)
     broadcast_thread.start()
 
-    unicast_thread = Thread(target=unicast_target, args=(message_handler, args.port,))
+    unicast_thread = Thread(target=unicast_target, args=(message_handler, args.port, application_state))
     threads.append(unicast_thread)
     unicast_thread.start()
 
