@@ -30,6 +30,7 @@ class ControlPlane:
         self._node = node
 
     def register_node(self, node: Node):
+        logging.info(f"Registering node {node}")
         self._nodes.add(node)
 
     def remove_node(self, node: Node):
@@ -93,12 +94,14 @@ class ControlPlane:
         return self.get_nodes_sorted().index(f"{node.ip}:{node.port}")
 
     def left_neighbour(self, node: Node):
+        logging.info(f"Nodes: {self.nodes}")
         left_neighbour = self.get_nodes_sorted()[
             (self.ring_index(node) - 1) % len(self.nodes)
         ]
         return self.get_node_from_socket(left_neighbour)
 
     def right_neighbour(self, node: Node):
+        logging.info(f"Nodes: {self.nodes}")
         right_neighbour = self.get_nodes_sorted()[
             (self.ring_index(node) + 1) % len(self.nodes)
         ]

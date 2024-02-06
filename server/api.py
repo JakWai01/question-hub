@@ -200,14 +200,14 @@ def election_handler(message: Message, ip: str, cp: ControlPlane, election: Elec
         hop=msg["hop"],
         phase=msg["phase"],
     )
-    print(f"{vote.leader_stat} vs. {election.gid}")
+    print(f"{vote.leader_stat} vs. {cp.node.uuid}")
     
     if vote.hop == 1 and vote.phase == 0:
         time.sleep(1)
 
     # Handle reply
     if vote.hop is None:
-        if vote.leader_stat != election.gid:
+        if vote.leader_stat != cp.node.uuid:
             vote.hop = None
             Message(
                 opcode=OpCode.ELECTION_REPLY,
@@ -228,7 +228,7 @@ def election_handler(message: Message, ip: str, cp: ControlPlane, election: Elec
 
     # Handle vote
     else:
-        if vote.leader_stat > election.gid:
+        if vote.leader_stat > cp.node.uuid:
             if vote.hop < 2**vote.phase:
                 msg = ElectionData(
                     vote.gid,
@@ -252,7 +252,7 @@ def election_handler(message: Message, ip: str, cp: ControlPlane, election: Elec
                     port=cp.node.port,
                     data=json.dumps(vote.__dict__),
                 ).send(previous_neighbour.ip, previous_neighbour.port)
-        elif vote.leader_stat == election.gid:
+        elif vote.leader_stat == cp.node.uuid:
             final = 2 ** (vote.phase + 1) > len(cp.nodes)
             if final:
                 election.received = {}
@@ -270,7 +270,7 @@ def hello_reply_handler(
     logging.debug(f"Received node state: {message.data}")
 
     new_nodes = [
-        Node(node["ip"], node["port"], node["leader"]) for node in message.data
+        Node(node["ip"], node["port"], node["leader"], node["uuid"]) for node in message.data
     ]
 
     for node in new_nodes:
@@ -286,7 +286,9 @@ def hello_reply_handler(
 
 
 def hello_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
-    cp.register_node(Node(ip, message.port))
+    msg = json.loads(message.data)
+
+    cp.register_node(Node(ip, message.port, uuid=msg["uuid"]))
 
     if cp.current_leader == None or cp.node.leader == True:
         Message(

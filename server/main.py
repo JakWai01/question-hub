@@ -1,4 +1,5 @@
 import argparse
+import json
 from threading import Thread
 import logging
 import time
@@ -62,7 +63,7 @@ def main():
     heartbeat_thread.start()
     threads.append(heartbeat_thread)
 
-    Message(OpCode.HELLO, port=cp.node.port).broadcast(2)
+    Message(OpCode.HELLO, port=cp.node.port, data=json.dumps(cp.node.__dict__)).broadcast(2)
 
     for thread in threads:
         thread.join()
