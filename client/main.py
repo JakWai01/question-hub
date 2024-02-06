@@ -216,13 +216,14 @@ def init():
     parser = argparse.ArgumentParser(prog="Client")
 
     parser.add_argument("--port", default="3678", type=int)
+    parser.add_argument("--frontend-port", default="8080", type=int)
     parser.add_argument("--loglevel", default="INFO", type=str)
 
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel)
 
     host = '0.0.0.0'
-    http_port = find_available_port(start_port=5000)
+    http_port = find_available_port(start_port=args.frontend_port)
 
     threads = []
     application_state = ApplicationState()

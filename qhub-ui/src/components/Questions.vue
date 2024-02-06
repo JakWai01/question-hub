@@ -59,7 +59,7 @@
 import { ref, onMounted } from 'vue'
 
 const questions = ref([])
-const flaskIP = ref('http://localhost:5000/api')
+const flaskIP = ref('/api')
 const formDialogVisible = ref(false);
 const text = ref('');
 
