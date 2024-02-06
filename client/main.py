@@ -192,7 +192,7 @@ def vote_handler(message, ip, application_state, cp: ControlPlane):
     msg = json.loads(message.data)
     question = application_state.get_question_from_uuid(msg["question_uuid"])
     question.toggle_vote(Vote(msg["socket"], msg["question_uuid"]))
-    print(f"Added vote from {msg["socket"]} to application state")
+    print(f"Added vote from {msg['socket']} to application state")
     
 def election_result_handler(message, ip, application_state, cp):
     cp.leader_ip = ip
