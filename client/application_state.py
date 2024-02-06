@@ -23,8 +23,10 @@ class Question:
     def toggle_vote(self, vote: Vote):
         if self.not_voted_for(vote):
             self.votes.append(vote)
-        else: 
-            self.votes.remove(vote)
+        else:
+            for v in self.votes:
+                if v.socket == vote.socket:
+                    self.votes.remove(v)
 
     # Verify that one client can only vote once per question
     def not_voted_for(self, vote: Vote):
