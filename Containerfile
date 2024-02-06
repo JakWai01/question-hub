@@ -2,7 +2,7 @@ FROM node:20-alpine AS frontend
 
 WORKDIR /ui
 
-COPY qhub-ui .
+COPY ./qhub-ui .
 
 RUN npm ci && npm run build
 

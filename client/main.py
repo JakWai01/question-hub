@@ -150,7 +150,7 @@ def broadcast_target(callback, application_state: ApplicationState, cp: ControlP
             if data:
                 msg = Message.unmarshal(data)
 
-                logging.debug(f"Broadcast message received: {msg.opcode}")
+                logging.info(f"Broadcast message received: {msg.opcode}")
 
                 callback(msg, ip, application_state, cp)
     except KeyboardInterrupt:
@@ -174,30 +174,30 @@ def unicast_target(callback, lport: int, application_state: ApplicationState, cp
 
 # Set current application state to the application state received by the server
 def hello_reply_handler(message, ip, application_state, cp: ControlPlane):
-    print(f"Received this message data in hello reply {message.data}")
+    logging.info(f"Received this message data in hello reply {message.data}")
     app_state = json.loads(message.data, object_hook=lambda d: ApplicationState(**d))
     application_state.questions = app_state.questions
 
     cp.leader_ip = ip      
     cp.leader_port = message.port
 
-    print("Received hello reply")
+    logging.info("Received hello reply")
 
 def question_handler(message, ip, application_state, cp: ControlPlane):
     msg = json.loads(message.data)
     application_state.add_question(Question(msg["text"], msg["uuid"]))
-    print(f"Added question {msg['text']} to application state")
+    logging.info(f"Added question {msg['text']} to application state")
 
 def vote_handler(message, ip, application_state, cp: ControlPlane):
     msg = json.loads(message.data)
     question = application_state.get_question_from_uuid(msg["question_uuid"])
     question.toggle_vote(Vote(msg["socket"], msg["question_uuid"]))
-    print(f"Added vote from {msg['socket']} to application state")
+    logging.info(f"Added vote from {msg['socket']} to application state")
     
 def election_result_handler(message, ip, application_state, cp):
     cp.leader_ip = ip
     cp.leader_port = message.port
-    print(f"Switching leader to {cp.leader_ip}:{cp.leader_port}") 
+    logging.info(f"Switching leader to {cp.leader_ip}:{cp.leader_port}") 
 
 def message_handler(message: Message, ip: str, application_state: ApplicationState, cp: ControlPlane):
     if message.opcode is OpCode.HELLO_REPLY:

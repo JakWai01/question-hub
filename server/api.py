@@ -10,9 +10,10 @@ import json
 from election import ElectionData
 from application_state import ApplicationState, Question, Vote
 import node
+import jsonpickle
 
 def application_state_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
-    msg = json.loads(message.data)
+    msg = json.decode(message.data)
 
     print(msg)
 
@@ -151,7 +152,7 @@ def hello_server_handler(message, ip, cp, election, app_state):
     application_state = app_state.get_application_state()
 
     if cp.current_leader == None or cp.node.leader == True:
-        Message(opcode=OpCode.HELLO_REPLY, port=cp.node.port, data=json.dumps(application_state)).send(ip, message.port)
+        Message(opcode=OpCode.HELLO_REPLY, port=cp.node.port, data=jsonpickle.encode(application_state)).send(ip, message.port)
 
 def message_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
     if ip == cp.node.ip and message.port == cp.node.port:
@@ -281,7 +282,7 @@ def hello_reply_handler(
     new_nodes = [
         Node(node["ip"], node["port"], node["leader"], node["uuid"]) for node in message.data
     ]
-
+    
     for node in new_nodes:
         cp.register_heartbeat(f"{node.ip}:{node.port}")
 
@@ -309,11 +310,8 @@ def hello_handler(message: Message, ip: str, cp: ControlPlane, election: Electio
         Message (
             opcode = OpCode.APPLICATIONS_STATE,
             port=cp.node.port,
-            data=json.dumps(app_state.__dict__)
+            data=jsonpickle.encode(app_state)
         )
         
         # TODO: Can I perfrom this check here
-        if node.uuid > cp.node.uuid:
-                logging.info("Starting cause I am inferior")
-                e = Election(cp)
-                e.initiate_election()
+        

@@ -1,17 +1,6 @@
 # question-hub
 
-## Concept
+## Usage 
 
-## Todo
-
-- [x] Implement a way for server nodes to discover each other
-- [x] Implement a way for a node to announce its own presence
-- [x] Move to a more sophisticated handler model
-- [x] Implement heartbeat messages
-- [ ] Implement leader election
-  - [ ] Implement a way to mark a node as leader
-  - [ ] When the leader is not alive anymore, initiate a new leader election
-  - [ ] Leader election
-- [ ] Add database
-- [ ] Persist state of application
-- [ ] Synchronous data replication
+When using the server outside of the `docker-compose` setup, the network has to be configured to `network_mode: host` in order for the broadcast to work.
+This also does not work at the moment. Only starting the client with `python3 main.py` works. The container can't receive broadcast messages from the server
