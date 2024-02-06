@@ -19,9 +19,9 @@ def application_state_handler(message: Message, ip: str, cp: ControlPlane, elect
 # Each question is assigned a unique UUID for identification purposes
 def vote_request_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
     msg = json.loads(message.data)
-    question = app_state.get_question_from_uuid(msg.uuid)
+    question = app_state.get_question_from_uuid(msg["question_uuid"])
 
-    vote = Vote(msg.socket, msg.uuid)
+    vote = Vote(msg["socket"], msg["question_uuid"])
 
     question.toggle_vote(vote)
     Message(opcode=OpCode.VOTE, port=cp.node.port, data=json.dumps(vote.__dict__)).broadcast()
@@ -48,7 +48,7 @@ def question_request_handler(message: Message, ip: str, cp: ControlPlane, electi
 def question_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
     msg = json.loads(message.data)
     
-    question = Question(msg.text)
+    question = Question(msg["text"], msg["uuid"])
     app_state.add_question(question)
 
 def heartbeat_handler(message: Message, ip: str, cp: ControlPlane, election: Election):

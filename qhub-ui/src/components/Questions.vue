@@ -30,9 +30,9 @@
             <div class="d-flex">
 
               <div class="d-flex flex-column pt-2">
-                <h3>{{ question.order }}</h3>
+                <h3>{{ question.votes }}</h3>
                 <v-btn class="ma-1" size="small" variant="text" icon="mdi-thumb-up" color="blue-lighten-2"
-                  @click="voteUp(question.id)"></v-btn>
+                  @click="voteUp(question.uuid)"></v-btn>
               </div>
 
               <v-expansion-panel-title expand-icon="mdi-menu-down">
@@ -75,7 +75,7 @@ const fetchData = async () => {
   }
 };
 
-const voteUp = async (questionId) => {
+const voteUp = async (uuid) => {
   try {
     const response = await fetch(`${flaskIP.value}/vote_up`, {
       method: 'POST',
@@ -84,7 +84,7 @@ const voteUp = async (questionId) => {
       },
       body: JSON.stringify({
         // TODO: QuestionID is null
-        uuid: questionId,
+        uuid: uuid,
       }),
     });
 
@@ -93,7 +93,9 @@ const voteUp = async (questionId) => {
     if (result.success) {
       console.log('Order updated successfully');
       // re-fetch the data after updating the order
-      fetchData();
+      // fetchData();
+      await fetchData();
+      closeFormDialog()
     } else {
       console.error('Error updating order:', result.message);
     }

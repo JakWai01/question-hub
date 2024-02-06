@@ -41,6 +41,7 @@ class OpCode(str, Enum):
     HELLO_REPLY = "hello_reply"
     HEARTBEAT = "heartbeat"
     VOTE_REQUEST = "vote_request"
+    VOTE = "vote"
     QUESTION_REQUEST = "question_request"
     QUESTION = "question"
 

@@ -59,7 +59,7 @@ def change_order():
     try:
         # Get the id from the request
         print(request.data)
-        question_id = int(request.json['uuid'])
+        question_uuid = request.json['uuid']
 
         # Find the message with the given id
         # message = next((item for item in data if item['id'] == message_id), None)
@@ -70,17 +70,23 @@ def change_order():
         #     return jsonify({'success': True, 'message': 'Order updated successfully'})
         # else:
         #     return jsonify({'success': False, 'message': 'Message not found'})
-        application_state = app.config["application-state"]
+        cp = app.config["cp"]
 
-        print(f"Target Question ID {question_id}")
-        for question in application_state.questions:
-            print(f"Current question_id {question.uuid}")
-            if question.uuid == question_id:
-                print(f"Request sid: {request.sid}")
-                question.toggle_vote(Vote(question_uuid=question_id, socket=request.sid)) 
-                return jsonify({'success': True, 'message': 'Voted successfully'})
-            else:
-                return jsonify({'success': False, 'message': 'Question not found'})
+        vote = Vote(socket=f"{cp.ip}:{cp.port}", question_uuid=question_uuid)
+        # print(f"Target Question ID {question_id}")
+        # for question in application_state.questions:
+        #     print(f"Current question_id {question.uuid}")
+        #     if question.uuid == question_id:
+        #         print(f"Request sid: {request.sid}")
+        #         question.toggle_vote(Vote(question_uuid=question_id, socket=request.sid)) 
+        #         return jsonify({'success': True, 'message': 'Voted successfully'})
+        #     else:
+        #         return jsonify({'success': False, 'message': 'Question not found'})
+        Message(opcode=OpCode.VOTE_REQUEST, port=cp.port, data=json.dumps(vote.__dict__)).send(cp.leader_ip, cp.leader_port)
+
+        # Return a simple "OK" message
+        return jsonify({'success': True, 'message': 'Vote posted successfully'}), 202
+
 
     except Exception as e:
         print(e)
@@ -107,7 +113,7 @@ def add_question():
         Message(opcode=OpCode.QUESTION_REQUEST, port=cp.port, data=json.dumps(new_question)).send(cp.leader_ip, cp.leader_port)
 
         # Return a simple "OK" message
-        return jsonify({'success': True, 'message': 'Question added successfully'})
+        return jsonify({'success': True, 'message': 'Question posted successfully'}), 202
     except Exception as e:
         print(e)
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -172,8 +178,15 @@ def hello_reply_handler(message, ip, application_state, cp: ControlPlane):
 
 def question_handler(message, ip, application_state, cp: ControlPlane):
     msg = json.loads(message.data)
-    application_state.add_question(Question(msg["text"]))
+    application_state.add_question(Question(msg["text"], msg["uuid"]))
     print(f"Added question {msg['text']} to application state")
+
+def vote_handler(message, ip, application_state, cp: ControlPlane):
+    msg = json.loads(message.data)
+    question = application_state.get_question_from_uuid(msg["question_uuid"])
+    question.toggle_vote(Vote(msg["socket"], msg["question_uuid"]))
+    print(f"Added vote from {msg["socket"]} to application state")
+    
 
 def message_handler(message: Message, ip: str, application_state: ApplicationState, cp: ControlPlane):
     if message.opcode is OpCode.HELLO_REPLY:
@@ -181,6 +194,8 @@ def message_handler(message: Message, ip: str, application_state: ApplicationSta
         hello_reply_handler(message, ip, application_state, cp)
     elif message.opcode is OpCode.QUESTION:
         question_handler(message, ip, application_state, cp)
+    elif message.opcode is OpCode.VOTE:
+        vote_handler(message, ip, application_state, cp)
     else:
         return  
     

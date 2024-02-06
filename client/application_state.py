@@ -13,11 +13,11 @@ class Question:
     text: str
     votes: list[Vote]
 
-    def __init__(self, text):
+    def __init__(self, text, uuid=None):
         self.text = text
         # Maybe initialize with own socket since we are automatically voting for ourselves
         self.votes = []
-        self.uuid = str(uuid.uuid4())
+        self.uuid = str(uuid.uuid4()) if uuid==None else uuid
 
     # Add vote to votes list
     def toggle_vote(self, vote: Vote):
