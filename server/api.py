@@ -107,9 +107,12 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election,
                 # If the other node has a higher port than myself, trigger election
                 node = cp.get_node_from_socket(socket)
                 
-                if cp.node.leader == True and int(str.split(socket, ':')[1]) > cp.node.port:
-                    e = Election(cp)
-                    e.initiate_election()
+                # TODO: This triggers everytime again
+                # TODO: Take my own leadership away
+                # if cp.node.leader == True and node.uuid > cp.node.uuid:
+                #     logging.info("Starting cause I am inferior")
+                #     e = Election(cp)
+                #     e.initiate_election()
                     
 
                 if hb + 2 < int(time.time()):
@@ -118,11 +121,14 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election,
                     new_hb_dict.pop(socket)
                     cp._node_heartbeats = new_hb_dict
 
+                    # If the leader died
+                    # And there are more than 1 node left
+                    # And my port is the maximum port
                     if (
                         node.leader is True
                         and len(cp._node_heartbeats) > 1
-                        and str(cp.node.port)
-                        == str.split(max(cp._node_heartbeats), ":")[1]
+                        and cp.node.uuid
+                        == max(cp.nodes, key=lambda node: node.uuid)
                     ):
                         e = Election(cp)
                         e.initiate_election()
@@ -200,8 +206,9 @@ def election_handler(message: Message, ip: str, cp: ControlPlane, election: Elec
         hop=msg["hop"],
         phase=msg["phase"],
     )
-    print(f"{vote.leader_stat} vs. {cp.node.uuid}")
-    
+    # print(f"{vote.leader_stat} vs. {cp.node.uuid}")
+    print(f"Current vote: {vote.__dict__}")
+
     if vote.hop == 1 and vote.phase == 0:
         time.sleep(1)
 
@@ -262,6 +269,8 @@ def election_handler(message: Message, ip: str, cp: ControlPlane, election: Elec
                 Message(
                     opcode=OpCode.ELECTION_RESULT, port=vote.leader_port
                 ).broadcast()
+        else:
+            logging.info("Dropping election messages, since stat is smaller than own one")
 
 
 def hello_reply_handler(
@@ -288,7 +297,8 @@ def hello_reply_handler(
 def hello_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
     msg = json.loads(message.data)
 
-    cp.register_node(Node(ip, message.port, uuid=msg["uuid"]))
+    node = Node(ip, message.port, uuid=msg["uuid"])
+    cp.register_node(node)
 
     if cp.current_leader == None or cp.node.leader == True:
         Message(
@@ -301,3 +311,9 @@ def hello_handler(message: Message, ip: str, cp: ControlPlane, election: Electio
             port=cp.node.port,
             data=json.dumps(app_state.__dict__)
         )
+        
+        # TODO: Can I perfrom this check here
+        if node.uuid > cp.node.uuid:
+                logging.info("Starting cause I am inferior")
+                e = Election(cp)
+                e.initiate_election()
