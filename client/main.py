@@ -187,6 +187,10 @@ def vote_handler(message, ip, application_state, cp: ControlPlane):
     question.toggle_vote(Vote(msg["socket"], msg["question_uuid"]))
     print(f"Added vote from {msg["socket"]} to application state")
     
+def election_result_handler(message, ip, application_state, cp):
+    cp.leader_ip = ip
+    cp.leader_port = message.port
+    print(f"Switching leader to {cp.leader_ip}:{cp.leader_port}") 
 
 def message_handler(message: Message, ip: str, application_state: ApplicationState, cp: ControlPlane):
     if message.opcode is OpCode.HELLO_REPLY:
@@ -196,6 +200,8 @@ def message_handler(message: Message, ip: str, application_state: ApplicationSta
         question_handler(message, ip, application_state, cp)
     elif message.opcode is OpCode.VOTE:
         vote_handler(message, ip, application_state, cp)
+    elif message.opcode is OpCode.ELECTION_RESULT:
+        election_result_handler(message, ip, application_state, cp)
     else:
         return  
     

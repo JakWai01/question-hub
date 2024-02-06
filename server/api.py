@@ -29,9 +29,9 @@ def vote_request_handler(message: Message, ip: str, cp: ControlPlane, election: 
 # Since only the leader handles the request, the other servers also need to receive the update. This happens via the broadcast.
 def vote_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
     msg = json.loads(message.data)
-    question = app_state.get_question_from_uuid(msg.uuid)
+    question = app_state.get_question_from_uuid(msg["question_uuid"])
 
-    vote = Vote(msg.socket, msg.uuid)
+    vote = Vote(msg["socket"], msg["question_uuid"])
 
     question.toggle_vote(vote)
 
@@ -127,6 +127,7 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election,
             if len(cp._node_heartbeats) == 1 and cp.node.leader == False:
                 logging.info("Taking leadership since I am the only node left")
                 cp.make_leader(cp.node)
+                Message(opcode=OpCode.ELECTION_RESULT, port=cp.node.port).broadcast()
 
     except KeyboardInterrupt:
         exit(0)
@@ -148,11 +149,11 @@ def message_handler(message: Message, ip: str, cp: ControlPlane, election: Elect
         )
 
     if message.opcode is OpCode.HELLO:
-        hello_handler(message, ip, cp, election)
+        hello_handler(message, ip, cp, election, app_state)
     elif message.opcode is OpCode.HELLO_SERVER:
         hello_server_handler(message, ip, cp, election, app_state)
     elif message.opcode is OpCode.HELLO_REPLY:
-        hello_reply_handler(message, ip, cp, election, app_state)
+        hello_reply_handler(message, ip, cp, election)
     elif message.opcode is OpCode.HEARTBEAT:
         heartbeat_handler(message, ip, cp, election)
     elif (

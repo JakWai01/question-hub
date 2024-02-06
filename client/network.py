@@ -37,6 +37,7 @@ BROADCAST_IP = str(INTERFACE.network.broadcast_address)
 
 
 class OpCode(str, Enum):
+    HELLO = "hello"
     HELLO_SERVER = "hello_server"
     HELLO_REPLY = "hello_reply"
     HEARTBEAT = "heartbeat"
@@ -44,6 +45,7 @@ class OpCode(str, Enum):
     VOTE = "vote"
     QUESTION_REQUEST = "question_request"
     QUESTION = "question"
+    ELECTION_RESULT = "election_result"
 
 class Message:
     def __init__(
