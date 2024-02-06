@@ -1,12 +1,24 @@
 import argparse
 from threading import Thread
 import logging
+import time
 import node
 import control_plane
 import api
 from network import Message, OpCode, INTERFACE
 from election import Election
 from application_state import ApplicationState
+import socket
+
+def find_available_port(start_port, max_attempts=10):
+    for _ in range(max_attempts):
+        try:
+            # Create a socket to check if the port is available
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('localhost', start_port))
+            return start_port
+        except socket.error:
+            start_port += 1
 
 def main():
     parser = argparse.ArgumentParser(prog="Server")
@@ -38,7 +50,7 @@ def main():
 
     uni_thread = Thread(
         target=api.unicast_target,
-        args=(api.message_handler, cp.node.port, cp, election, app_state),
+        args=(api.message_handler, args.port, cp, election, app_state),
     )
     uni_thread.start()
     threads.append(uni_thread)

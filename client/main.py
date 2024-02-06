@@ -1,5 +1,5 @@
 import json
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import socket
 from threading import Thread
@@ -45,6 +45,13 @@ def find_available_port(start_port, max_attempts=10):
             start_port += 1
 
     raise Exception(f"Could not find an available port in the range {start_port} to {start_port + max_attempts}")    
+
+@app.route('/', defaults={"path": "index.html"})
+@app.route('/<path:path>') 
+def serve_static(path):
+    print(path, flush=True)
+    return send_from_directory('../qhub-ui/dist', path)
+
 
 # GET All Questions
 @app.route('/api/get', methods=['GET'])
@@ -205,7 +212,7 @@ def message_handler(message: Message, ip: str, application_state: ApplicationSta
     else:
         return  
     
-if __name__ == '__main__':
+def init():
     parser = argparse.ArgumentParser(prog="Client")
 
     parser.add_argument("--port", default="3678", type=int)
@@ -214,11 +221,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     logging.basicConfig(level=args.loglevel)
 
-    host = '127.0.0.1'
+    host = '0.0.0.0'
     http_port = find_available_port(start_port=5000)
 
     threads = []
-
     application_state = ApplicationState()
     cp = ControlPlane(None, None, INTERFACE.ip.compressed, args.port)
 
@@ -238,3 +244,6 @@ if __name__ == '__main__':
 
     for thread in threads:
         thread.join()
+
+if __name__ == '__main__':
+    init()

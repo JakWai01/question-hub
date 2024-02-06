@@ -30,6 +30,7 @@ class Election:
     def __init__(self, cp: ControlPlane):
         self.cp = cp
         self.received = {}
+        self.gid = str(uuid.uuid4())
 
     def initiate_election(self):
         logging.info("Starting a new election")
@@ -42,15 +43,15 @@ class Election:
             self.make_leader(node)
             return
 
-        gid = str(uuid.uuid4())
+        self.gid = str(uuid.uuid4())
 
-        self.send_vote_to_neighbours(gid, phase=0, hop=1)
+        self.send_vote_to_neighbours(self.gid, phase=0, hop=1)
 
     def send_vote_to_neighbours(
         self, gid: str, phase: int | None = 0, hop: int | None = 1
     ):
         msg = ElectionData(
-            gid, self.cp.node.ip, self.cp.node.port, self.cp.node.port, hop, phase
+            gid, self.cp.node.ip, self.cp.node.port, gid, hop, phase
         )
 
         right_neighbour = self.cp.right_neighbour(self.cp.node)
