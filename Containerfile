@@ -15,7 +15,7 @@ COPY requirements.txt .
 
 RUN apk add gcc python3-dev musl-dev linux-headers
 RUN pip install -r requirements.txt
-RUN pip install gunicorn
+RUN pip install gunicorn jsonpickle
 
 COPY --from=frontend /ui/dist ../qhub-ui/dist
 COPY client .

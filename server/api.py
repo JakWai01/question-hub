@@ -10,7 +10,19 @@ import json
 from election import ElectionData
 from application_state import ApplicationState, Question, Vote
 import node
-import jsonpickle
+
+class CustomEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, ApplicationState):
+            # Serialize the Question object to a dictionary
+            return {'_type': 'ApplicationState', **obj.__dict__}
+        if isinstance(obj, Question):
+            # Serialize the Question object to a dictionary
+            return {'_type': 'Question', **obj.__dict__}
+        if isinstance(obj, Vote):
+            # Serialize the Question object to a dictionary
+            return {'_type': 'Vote', **obj.__dict__}
+        return json.JSONEncoder.default(self, obj)
 
 def application_state_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
     msg = json.decode(message.data)
@@ -21,6 +33,9 @@ def application_state_handler(message: Message, ip: str, cp: ControlPlane, elect
 # Each question is assigned a unique UUID for identification purposes
 def vote_request_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
     msg = json.loads(message.data)
+
+    print(f"Received msg: {msg}")
+    print(app_state.questions[0].__dict__)
     question = app_state.get_question_from_uuid(msg["question_uuid"])
 
     vote = Vote(msg["socket"], msg["question_uuid"])
@@ -43,6 +58,7 @@ def question_request_handler(message: Message, ip: str, cp: ControlPlane, electi
 
     print(f"Received msg: {msg}") 
     question = Question(msg["text"])
+    print(f"Created question {question.__dict__}")
     app_state.add_question(question)
 
     Message(opcode=OpCode.QUESTION, port=cp.node.port, data=json.dumps(question.__dict__)).broadcast()
@@ -149,10 +165,10 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election,
 
 # Send application state
 def hello_server_handler(message, ip, cp, election, app_state): 
-    application_state = app_state.get_application_state()
+    application_state: ApplicationState = app_state
 
     if cp.current_leader == None or cp.node.leader == True:
-        Message(opcode=OpCode.HELLO_REPLY, port=cp.node.port, data=jsonpickle.encode(application_state)).send(ip, message.port)
+        Message(opcode=OpCode.HELLO_REPLY, port=cp.node.port, data=json.dumps(application_state, cls=CustomEncoder)).send(ip, message.port)
 
 def message_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
     if ip == cp.node.ip and message.port == cp.node.port:
@@ -310,7 +326,7 @@ def hello_handler(message: Message, ip: str, cp: ControlPlane, election: Electio
         Message (
             opcode = OpCode.APPLICATIONS_STATE,
             port=cp.node.port,
-            data=jsonpickle.encode(app_state)
+            data=json.dumps(app_state, cls=CustomEncoder)
         )
         
         # TODO: Can I perfrom this check here

@@ -89,6 +89,7 @@ def change_order():
         #         return jsonify({'success': True, 'message': 'Voted successfully'})
         #     else:
         #         return jsonify({'success': False, 'message': 'Question not found'})
+        logging.info(f"Sending vote {vote.__dict__}")
         Message(opcode=OpCode.VOTE_REQUEST, port=cp.port, data=json.dumps(vote.__dict__)).send(cp.leader_ip, cp.leader_port)
 
         # Return a simple "OK" message
@@ -150,7 +151,7 @@ def broadcast_target(callback, application_state: ApplicationState, cp: ControlP
             if data:
                 msg = Message.unmarshal(data)
 
-                logging.info(f"Broadcast message received: {msg.opcode}")
+                logging.debug(f"Broadcast message received: {msg.opcode}")
 
                 callback(msg, ip, application_state, cp)
     except KeyboardInterrupt:
@@ -172,10 +173,30 @@ def unicast_target(callback, lport: int, application_state: ApplicationState, cp
         listen_socket.close()
         exit(0)
 
+class CustomDecoder(json.JSONDecoder):
+    def __init__(self, *args, **kwargs):
+        json.JSONDecoder.__init__(self, object_hook=self.dict_to_object, *args, **kwargs)
+
+    def dict_to_object(self, d):
+        if '_type' in d and d['_type'] == 'ApplicationState':
+            # If the dictionary represents a Question object, reconstruct it
+            del d['_type']
+            return ApplicationState(**d)
+        if '_type' in d and d['_type'] == 'Question':
+            # If the dictionary represents a Question object, reconstruct it
+            del d['_type']
+            return Question(**d)
+        if '_type' in d and d['_type'] == 'Vote':
+            # If the dictionary represents a Question object, reconstruct it
+            del d['_type']
+            return Vote(**d)
+        return d
+
 # Set current application state to the application state received by the server
 def hello_reply_handler(message, ip, application_state, cp: ControlPlane):
     logging.info(f"Received this message data in hello reply {message.data}")
-    app_state = json.loads(message.data, object_hook=lambda d: ApplicationState(**d))
+    logging.info(message.data)
+    app_state = json.loads(message.data, cls=CustomDecoder)
     application_state.questions = app_state.questions
 
     cp.leader_ip = ip      
@@ -185,14 +206,17 @@ def hello_reply_handler(message, ip, application_state, cp: ControlPlane):
 
 def question_handler(message, ip, application_state, cp: ControlPlane):
     msg = json.loads(message.data)
-    application_state.add_question(Question(msg["text"], msg["uuid"]))
-    logging.info(f"Added question {msg['text']} to application state")
+    logging.info(f"Question received {msg}")
+    question = Question(text=msg["text"], uuid=msg["uuid"])
+    application_state.add_question(question)
+    logging.info(f"Added question {question.__dict__} to application state")
 
 def vote_handler(message, ip, application_state, cp: ControlPlane):
     msg = json.loads(message.data)
     question = application_state.get_question_from_uuid(msg["question_uuid"])
-    question.toggle_vote(Vote(msg["socket"], msg["question_uuid"]))
-    logging.info(f"Added vote from {msg['socket']} to application state")
+    vote = Vote(msg["socket"], msg["question_uuid"])
+    question.toggle_vote(vote)
+    logging.info(f"Added vote {vote.__dict__} to application state")
     
 def election_result_handler(message, ip, application_state, cp):
     cp.leader_ip = ip

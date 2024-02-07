@@ -4,7 +4,7 @@ WORKDIR /server
 
 
 RUN apk add gcc musl-dev linux-headers
-RUN pip install netifaces==0.11.0
+RUN pip install netifaces==0.11.0 jsonpickle
 
 COPY . . 
 

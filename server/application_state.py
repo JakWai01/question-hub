@@ -1,4 +1,4 @@
-import uuid
+from uuid import uuid4
 
 class Vote:
     socket: str
@@ -13,11 +13,11 @@ class Question:
     text: str
     votes: list[Vote]
 
-    def __init__(self, text, question_uuid=None):
+    def __init__(self, text, votes=None, uuid=None):
         self.text = text
         # Maybe initialize with own socket since we are automatically voting for ourselves
-        self.votes = []
-        self.uuid = str(uuid.uuid4()) if question_uuid==None else question_uuid
+        self.votes = [] if votes==None else votes
+        self.uuid = str(uuid4()) if uuid==None else uuid
 
     # Add vote to votes list
     def toggle_vote(self, vote: Vote):
