@@ -144,18 +144,7 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election,
         while True:
             new_hb_dict = cp._node_heartbeats.copy()
             for socket, hb in cp._node_heartbeats.items():
-                # If the other node has a higher port than myself, trigger election
-                # print(f"Available nodes: {cp.nodes}")
-                # print(f"Current socket: {socket}")
                 node = cp.get_node_from_socket(socket)
-                
-                # TODO: This triggers everytime again
-                # TODO: Take my own leadership away
-                # if cp.node.leader == True and node.uuid > cp.node.uuid:
-                #     logging.info("Starting cause I am inferior")
-                #     e = Election(cp)
-                #     e.initiate_election()
-                    
 
                 if hb + 2 < int(time.time()):
                     cp.remove_node(node)
@@ -163,14 +152,11 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election,
                     new_hb_dict.pop(socket)
                     cp._node_heartbeats = new_hb_dict
 
-                    # If the leader died
-                    # And there are more than 1 node left
-                    # And my port is the maximum port
                     if (
                         node.leader is True
                         and len(cp._node_heartbeats) > 1
                         and cp.node.uuid
-                        == max(cp.nodes, key=lambda node: node.uuid)
+                        == max(cp.nodes, key=lambda node: node.uuid).uuid
                     ):
                         e = Election(cp)
                         e.initiate_election()
