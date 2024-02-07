@@ -23,31 +23,21 @@
       </v-dialog>
 
       <div>
-        <v-expansion-panels class="mb-6">
-
-          <v-expansion-panel v-for="question in questions" :key="question">
-
-            <div class="d-flex">
-
-              <div class="d-flex flex-column pt-2">
-                <h3>{{ question.votes }}</h3>
-                <v-btn class="ma-1" size="small" variant="text" icon="mdi-thumb-up" color="blue-lighten-2"
-                  @click="voteUp(question.uuid)"></v-btn>
-              </div>
-
-              <v-expansion-panel-title expand-icon="mdi-menu-down">
-                {{ question.text }}
-              </v-expansion-panel-title>
-
-            </div>
-
-            <v-expansion-panel-text>
-              {{ question.message }}
-            </v-expansion-panel-text>
-
-          </v-expansion-panel>
-
-        </v-expansion-panels>
+        <!-- Loop through the questions and display each one as a card -->
+        <v-card v-for="question in questions" :key="question.uuid" class="mb-2">
+          <v-card-title></v-card-title>
+          <v-card-text>
+            {{ question.text }}
+          </v-card-text>
+          <v-card-actions>
+            <v-spacer></v-spacer>
+            <!-- Like button -->
+            <v-btn @click="voteUp(question.uuid)">
+              <v-icon color="red-darken-3" size="large">mdi-heart</v-icon>
+              <span class="text-subtitle-1">{{ question.votes }}</span>
+            </v-btn>
+          </v-card-actions>
+        </v-card>
       </div>
 
 
@@ -93,7 +83,6 @@ const voteUp = async (uuid) => {
     if (result.success) {
       console.log('Order updated successfully');
       // re-fetch the data after updating the order
-      // fetchData();
       await fetchData();
       closeFormDialog()
     } else {
