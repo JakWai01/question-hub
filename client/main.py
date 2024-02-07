@@ -13,15 +13,6 @@ app = Flask(__name__)
 
 CORS(app)
 
-# Sample data for demonstration
-data = [
-    { 'id': 1, 'title': 'Python3 Issues', 'message': 'I cant run python3 commands on shell', 'order': 0 },
-    { 'id': 2, 'title': 'Python2 Issues', 'message': 'I cant run python3 commands on shell', 'order': 0 },
-    { 'id': 3, 'title': 'Python1 Issues', 'message': 'I cant run python3 commands on shell', 'order': 0 },
-    { 'id': 4, 'title': 'Python0 Issues', 'message': 'I cant run python3 commands on shell', 'order': 0 },
-  ]
-
-
 def get_available_ip():
     try:
         # Create a socket to get the local machine's IP address
@@ -113,7 +104,6 @@ def add_question():
         }
 
         # Append the new question to the data array
-        data.append(new_question)
         cp = app.config["cp"]
 
         # TODO: Send message to server
