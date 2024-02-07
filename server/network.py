@@ -48,7 +48,7 @@ class OpCode(str, Enum):
     QUESTION = "question"
     VOTE_REQUEST = "vote_request"
     VOTE = "vote"
-    APPLICATIONS_STATE = "application_state"
+    APPLICATION_STATE = "application_state"
 
 
 class Message:

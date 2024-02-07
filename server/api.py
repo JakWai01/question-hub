@@ -24,10 +24,32 @@ class CustomEncoder(json.JSONEncoder):
             return {'_type': 'Vote', **obj.__dict__}
         return json.JSONEncoder.default(self, obj)
 
-def application_state_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
-    msg = json.decode(message.data)
+class CustomDecoder(json.JSONDecoder):
+    def __init__(self, *args, **kwargs):
+        json.JSONDecoder.__init__(self, object_hook=self.dict_to_object, *args, **kwargs)
 
-    print(msg)
+    def dict_to_object(self, d):
+        if '_type' in d and d['_type'] == 'ApplicationState':
+            # If the dictionary represents a Question object, reconstruct it
+            del d['_type']
+            return ApplicationState(**d)
+        if '_type' in d and d['_type'] == 'Question':
+            # If the dictionary represents a Question object, reconstruct it
+            del d['_type']
+            return Question(**d)
+        if '_type' in d and d['_type'] == 'Vote':
+            # If the dictionary represents a Question object, reconstruct it
+            del d['_type']
+            return Vote(**d)
+        return d
+    
+def application_state_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
+    application_state = json.loads(message.data, cls=CustomDecoder)
+    app_state.questions = application_state.questions
+
+    logging.info("Received application state")
+    # print("RECEIVED APPLICATION STATE")
+    print(app_state.__dict__)
 
 # Vote for an existing question. If the leader does not know about the question, the question does not exist. 
 # Each question is assigned a unique UUID for identification purposes
@@ -108,6 +130,7 @@ def unicast_target(callback, lport: int, cp: ControlPlane, election: Election, a
         while True:
             data, (ip, port) = listen_socket.recvfrom(1024)
             if data:
+                print(data)
                 msg = Message.unmarshal(data)
                 logging.debug(f"Unicast message received: {msg.opcode}")
                 callback(msg, ip, cp, election, app_state)
@@ -122,6 +145,8 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election,
             new_hb_dict = cp._node_heartbeats.copy()
             for socket, hb in cp._node_heartbeats.items():
                 # If the other node has a higher port than myself, trigger election
+                # print(f"Available nodes: {cp.nodes}")
+                # print(f"Current socket: {socket}")
                 node = cp.get_node_from_socket(socket)
                 
                 # TODO: This triggers everytime again
@@ -293,11 +318,18 @@ def election_handler(message: Message, ip: str, cp: ControlPlane, election: Elec
 def hello_reply_handler(
     message: Message, ip: str, cp: ControlPlane, election: Election
 ):
-    logging.debug(f"Received node state: {message.data}")
+    logging.info(f"Received node state: {message.data}")
 
-    new_nodes = [
-        Node(node["ip"], node["port"], node["leader"], node["uuid"]) for node in message.data
-    ]
+    # Same node different uuid returns an error 
+    # new_nodes = [
+    #     Node(node["ip"], node["port"], node["leader"], node["uuid"]) for node in message.data
+    # ]
+
+    new_nodes = []
+
+    for node in message.data:
+        if cp.node.ip != node["ip"] or cp.node.port != int(node["port"]):
+            new_nodes.append(Node(node["ip"], node["port"], node["leader"], node["uuid"]))
     
     for node in new_nodes:
         cp.register_heartbeat(f"{node.ip}:{node.port}")
@@ -315,8 +347,17 @@ def hello_handler(message: Message, ip: str, cp: ControlPlane, election: Electio
     msg = json.loads(message.data)
 
     node = Node(ip, message.port, uuid=msg["uuid"])
+
+    print(f"Before removing or adding: {cp.nodes}")
+
+    old_node = cp.get_node_from_socket(f"{ip}:{message.port}")
+    if old_node != None:
+        cp.remove_node(old_node)
+
+    print(f"After removing: {cp.nodes}")
     cp.register_node(node)
 
+    print(f"After removing and adding: {cp.nodes}")
     if cp.current_leader == None or cp.node.leader == True:
         Message(
             opcode=OpCode.HELLO_REPLY,
@@ -324,10 +365,9 @@ def hello_handler(message: Message, ip: str, cp: ControlPlane, election: Electio
             data=list(map(lambda node: node.__dict__, cp.nodes)),
         ).send(ip, message.port)
         Message (
-            opcode = OpCode.APPLICATIONS_STATE,
+            opcode = OpCode.APPLICATION_STATE,
             port=cp.node.port,
             data=json.dumps(app_state, cls=CustomEncoder)
-        )
+        ).send(ip, message.port)
         
-        # TODO: Can I perfrom this check here
         
