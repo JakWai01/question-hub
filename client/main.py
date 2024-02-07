@@ -147,7 +147,7 @@ def broadcast_target(callback, application_state: ApplicationState, cp: ControlP
 
     try:
         while True:
-            data, (ip, port) = listen_socket.recvfrom(1024)
+            data, (ip, port) = listen_socket.recvfrom(2048)
             if data:
                 msg = Message.unmarshal(data)
 
@@ -164,7 +164,7 @@ def unicast_target(callback, lport: int, application_state: ApplicationState, cp
 
     try:
         while True:
-            data, (ip, port) = listen_socket.recvfrom(1024)
+            data, (ip, port) = listen_socket.recvfrom(2048)
             if data:
                 msg = Message.unmarshal(data)
                 logging.debug(f"Unicast message received: {msg.opcode}")

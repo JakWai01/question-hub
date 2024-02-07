@@ -88,7 +88,7 @@ def question_request_handler(message: Message, ip: str, cp: ControlPlane, electi
 def question_handler(message: Message, ip: str, cp: ControlPlane, election: Election, app_state: ApplicationState):
     msg = json.loads(message.data)
     
-    question = Question(msg["text"], msg["uuid"])
+    question = Question(msg["text"], msg["votes"], msg["uuid"])
     app_state.add_question(question)
 
 def heartbeat_handler(message: Message, ip: str, cp: ControlPlane, election: Election):
@@ -110,7 +110,7 @@ def broadcast_target(callback, cp: ControlPlane, election: Election, app_state: 
 
     try:
         while True:
-            data, (ip, port) = listen_socket.recvfrom(1024)
+            data, (ip, port) = listen_socket.recvfrom(2048)
             if data:
                 msg = Message.unmarshal(data)
 
@@ -128,7 +128,7 @@ def unicast_target(callback, lport: int, cp: ControlPlane, election: Election, a
           
     try:
         while True:
-            data, (ip, port) = listen_socket.recvfrom(1024)
+            data, (ip, port) = listen_socket.recvfrom(2048)
             if data:
                 print(data)
                 msg = Message.unmarshal(data)
