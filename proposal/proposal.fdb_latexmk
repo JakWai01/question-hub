@@ -1,6 +1,6 @@
 # Fdb version 4
-["pdflatex"] 1707408021.76982 "/home/jakob/Documents/Projects/question-hub/proposal/proposal.tex" "proposal.pdf" "proposal" 1707408022.15091 0
-  "/home/jakob/Documents/Projects/question-hub/proposal/proposal.tex" 1707408022.01445 18521 253964514823f3f48a88b0c5773a7a43 ""
+["pdflatex"] 1707409542.52892 "/home/jakob/Documents/Projects/question-hub/proposal/proposal.tex" "proposal.pdf" "proposal" 1707409543.16189 0
+  "/home/jakob/Documents/Projects/question-hub/proposal/proposal.tex" 1707409542.23831 19071 1f4930298df0a8b60004fbc500d35c8e ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmbx10.tfm" 1136768653 1328 c834bbb027764024c09d3d2bf908b5f0 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmbx12.tfm" 1136768653 1324 c910af8c371558dc20f2d7822f66fe64 ""
@@ -36,8 +36,8 @@
   "/usr/share/texlive/texmf-dist/web2c/texmf.cnf" 1689984000 40900 887e0dc8cac988a9e9c574af364cf837 ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1706971732.84782 4602615 ac1019cb4c4ba39710c2cf7f752b378d ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1706971372 7871994 af3d304010043ae75e397eb4c017e66c ""
-  "proposal.aux" 1707408022.10045 2402 fd0f3fc21b6210473b418c5ecb164691 "pdflatex"
-  "proposal.tex" 1707408022.01445 18521 253964514823f3f48a88b0c5773a7a43 ""
+  "proposal.aux" 1707409543.06631 2402 bf96515ed06fe2366135b260f7c6fa17 "pdflatex"
+  "proposal.tex" 1707409542.23831 19071 1f4930298df0a8b60004fbc500d35c8e ""
   "question_hub_architecture_final.drawio.png" 1707392642.25463 36594 7772570abdb17c7c0d50e566375f8ce6 ""
   (generated)
   "proposal.aux"
