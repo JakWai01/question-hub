@@ -91,8 +91,6 @@ def question_handler(message: Message, ip: str, cp: ControlPlane, election: Elec
     question = Question(msg["text"], msg["votes"], msg["uuid"])
     app_state.add_question(question)
 
-def heartbeat_handler(message: Message, ip: str, cp: ControlPlane, election: Election):
-    cp.register_heartbeat(f"{ip}:{message.port}")
 
 
 def election_result_handler(
@@ -138,6 +136,29 @@ def unicast_target(callback, lport: int, cp: ControlPlane, election: Election, a
         listen_socket.close()
         exit(0)
 
+def heartbeat_handler(message: Message, ip: str, cp: ControlPlane, election: Election):
+    # holdback_queue = []
+    # delivery_queue = []
+    # #ordered reliable mutlicast
+    # if (S == R_q+1):
+    #     delivery_queue.append(message)
+    #     R_q = R_q+1
+    #     #if holfback queue is not empty, check if the first message in the queue can be delivered
+    #     if (holdback_queue):
+    #         for message in holdback_queue:
+    #             if (message.S == R_q+1):
+    #                 delivery_queue.append(message)
+    #                 holdback_queue.remove(message)
+    # if (S > R_q+1):
+    #     holdback_queue.append(message)
+    # if S <= R_q:
+    #     pass
+    # for S in <s,R>:
+    #     if R > R_s:
+    #         #send negative ack to s
+    #         pass
+    #
+    cp.register_heartbeat(f"{ip}:{message.port}")
 
 def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election, app_state: ApplicationState):
     try:
