@@ -26,7 +26,6 @@ allows for easy expansion and redistribution of computational resources, which
 boosts efficiency and shortens completion times. The architecture of a 
 distributed system focuses on the system as a whole and how its components are
 distributed across several machines\cite{tanenbaum2007distributed}.
-The selected distributed system's concept is explained in this proposal.
 \newline
 \newline
 Question Hub is a distributed system for facilitating live Q\&A sessions.
@@ -53,7 +52,7 @@ application state that is then propagated back to the clients.
 \subsubsection{Voting}
 
 Voting shall be implemented in the form of a leader election algorithm. The leader
-election algorithm should regularly determine a server node that gets control
+election algorithm should determine a server node that gets control
 of the application state. If the leader fails, a new leader should be determined
 immediately. 
 
@@ -61,13 +60,14 @@ immediately.
 
 There can be an infinite number of clients and servers in the system. All nodes should
 be able to discover the currently leading node via broadcast. The control node should then
-notify the new node about the current network topology.
+notify the new node about the current network topology in order for the new node to be aware of the
+current network topology going forward.
 
 \subsubsection{Fault tolerance}
 
 The system should still be functional, if single server instances fail. If a leader
 fails, a new leader should be elected and take over the work from the previously
-elected leader. Furthermore, the server nodes in the should regularly send heartbeat messages in order
+elected leader. Furthermore, the server nodes should regularly send heartbeat messages in order
 to determine liveness of the server nodes and detect possible node failures.
 
 \subsubsection{Ordered Reliable Multicast}
@@ -92,7 +92,7 @@ handled differently i.e. a client node does not have to be taken in account for
 possible future elections. By design, only the leader replies to \texttt{HELLO} and
 \texttt{HELLO\_SERVER} messages utilizing unicast by sending a \texttt{HELLO\_REPLY} message
 containing the current topology of the network as well as the application
-state. This is possible since every nodes provides its unicast port as a field
+state. This is possible since every node provides its unicast port as a field
 inside of every broadcast message. This provides the benefit of automatically
 announcing the current leader to the client as well as reducing the amount of
 messages in the system.
@@ -137,19 +137,7 @@ leader and it has been verified, the server instance broadcasts the operation
 to all nodes. This leads to clients receiving the most up to date information
 in their respective frontend as well as replicating the application state to
 all other server nodes in case the client crashes.
-\newline
-\newline
-A byzantine failure of a server instance can be tolerated by the system as
-long as the number of failed nodes does not exceed a third of the number of
-server instances in the system. This is implemented by utilizing the so-called
-"Oral Message" method message which is a proposed solution to handle such
-failures. In this system the leader sends the action to be performed to each
-other server instance. The other server instances then also act as a leader and
-send the message themselves to the other server instances. After executing this
-operation, each server instance received a message by every server instance and
-can decide based on the majority of messages received which action the system
-should perform. By using this approach, byzantine server instances can be
-tolerated as long as the constraint holds. \cite{lamport2019byzantine}.
+
 
 \subsection{Leader Election}
 
@@ -160,7 +148,8 @@ By utilizing the bidirectional capabilities of the Hirschberg-Sinclair
 algorithm, a performance of $O(n\log{}n)$ is possible.\cite{hirschberg1980decentralized}
 \newline
 \newline
-This algorithm was chosen since the number of participating nodes does not 
+This algorithm was chosen since the number of participating nodes
+does not need to be known at the beginning of the election.
 In General, the algorithm sends a message around in a ring of all nodes.
 Instead of comparing the size of processors, Question Hub is utilizing
 random UUIDs that are generated upon node creation. If a node receives a
