@@ -10,8 +10,6 @@ class ControlPlane:
         self._node_heartbeats = {}
         self._node_heartbeats_sent = {}
         self._node_heartbeats_received = {}
-        self._node_heartbeats_ACKS = {}
-        self._node_heartbeats_NEG_ACKS = {}
         self.current_leader: Node = None
 
     @property
@@ -29,20 +27,6 @@ class ControlPlane:
             else:
                 self._node_heartbeats_sent[socket] = 1
                 self._node_heartbeats_received[socket] = 1
-
-    def count_heartbeat_ACKS(self, socket: str):
-        if socket in self._node_heartbeats:
-            if socket in self._node_heartbeats_ACKS:
-                self._node_heartbeats_ACKS[socket] += 1
-            else:
-                self._node_heartbeats_ACKS[socket] = 1
-
-    def count_heartbeat_NEG_ACKS(self, socket: str):
-        if socket in self._node_heartbeats:
-            if socket in self._node_heartbeats_ACKS:
-                self._node_heartbeats_NEG_ACKS[socket] += 1
-            else:
-                self._node_heartbeats_NEG_ACKS[socket] = 1
 
     @nodes.setter
     def nodes(self, new_nodes: set[Node]):

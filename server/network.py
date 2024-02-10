@@ -68,7 +68,7 @@ class Message:
     def unmarshal(data_b: bytes) -> "Message":
         data_str = data_b.decode("UTF-8")
         payload = json.loads(data_str)
-        #logging.debug(f"Unmarshalled payload {payload}")
+        logging.debug(f"Unmarshalled payload {payload}")
         return Message(
             OpCode(payload.get("opcode")), payload.get("data"), payload.get("port")
         )

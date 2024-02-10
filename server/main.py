@@ -26,7 +26,7 @@ def main():
 
     parser.add_argument("--port", default=9765, type=int)
     parser.add_argument("--delay", default=1, type=int)
-    parser.add_argument("--loglevel", default="DEBUG", type=str)
+    parser.add_argument("--loglevel", default="INFO", type=str)
 
     args = parser.parse_args()
 
