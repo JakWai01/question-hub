@@ -112,7 +112,7 @@ def broadcast_target(callback, cp: ControlPlane, election: Election, app_state: 
             if data:
                 msg = Message.unmarshal(data)
 
-                logging.debug(f"Broadcast message received: {msg.opcode}")
+                #logging.debug(f"Broadcast message received: {msg.opcode}")
 
                 callback(msg, ip, cp, election, app_state)
     except KeyboardInterrupt:
@@ -128,37 +128,73 @@ def unicast_target(callback, lport: int, cp: ControlPlane, election: Election, a
         while True:
             data, (ip, port) = listen_socket.recvfrom(2048)
             if data:
-                print(data)
+                #print(data)
                 msg = Message.unmarshal(data)
-                logging.debug(f"Unicast message received: {msg.opcode}")
+                #logging.debug(f"Unicast message received: {msg.opcode}")
                 callback(msg, ip, cp, election, app_state)
     except KeyboardInterrupt:
         listen_socket.close()
         exit(0)
 
+#heartbeat ack handler
+def heartbeat_ack_handler(message: Message, ip: str, cp: ControlPlane, election: Election):
+    cp.count_heartbeat_ACKS(f"{cp.node.ip}:{cp.node.port}")
+    logging.debug(f"ACK {cp._node_heartbeats_ACKS} received from {ip}:{message.port}")
+
+def heartbeat_neg_ack_handler(message: Message, ip: str, cp: ControlPlane, election: Election):
+    cp.count_heartbeat_ACKS(f"{cp.node.ip}:{cp.node.port}")
+    logging.debug(f"NEG_ACK {cp._node_heartbeats_ACKS} received from {ip}:{message.port}")
+
 def heartbeat_handler(message: Message, ip: str, cp: ControlPlane, election: Election):
-    # holdback_queue = []
-    # delivery_queue = []
-    # #ordered reliable mutlicast
-    # if (S == R_q+1):
-    #     delivery_queue.append(message)
-    #     R_q = R_q+1
-    #     #if holfback queue is not empty, check if the first message in the queue can be delivered
-    #     if (holdback_queue):
-    #         for message in holdback_queue:
-    #             if (message.S == R_q+1):
-    #                 delivery_queue.append(message)
-    #                 holdback_queue.remove(message)
-    # if (S > R_q+1):
-    #     holdback_queue.append(message)
-    # if S <= R_q:
-    #     pass
-    # for S in <s,R>:
-    #     if R > R_s:
-    #         #send negative ack to s
-    #         pass
-    #
-    cp.register_heartbeat(f"{ip}:{message.port}")
+    holdback_queue = []
+    delivery_queue = []
+    #ordemessage.datared reliable mutlicast
+    local_socket = f"{cp.node.ip}:{cp.node.port}"
+    received_socket = f"{ip}:{message.port}"
+
+    #logging.debug(f"data  received{message.data['received']}")
+    Sp = cp._node_heartbeats_sent[local_socket]
+    if received_socket in message.data['received']:
+        if received_socket in cp._node_heartbeats_received:
+            if message.data['received'][received_socket] > cp._node_heartbeats_received[received_socket]:
+                cp._node_heartbeats_received[received_socket] = message.data['received'][received_socket]
+            else:
+                pass
+        else:
+            cp._node_heartbeats_received[received_socket] = message.data['received'][received_socket]
+    #logging.debug(f"local received {cp._node_heartbeats_received} sent {cp._node_heartbeats_sent}")
+
+    if local_socket in message.data['received']:
+        Rq = message.data['received'][local_socket]
+        #logging.debug(f"{local_socket}: Sp = {Sp} Rq = {Rq}")
+        if (Sp == Rq+1):
+            delivery_queue.append(message)
+            #logging.debug(f"delivery_queue {delivery_queue[0].data}")
+            Rq = Rq+1
+        #     cp.register_heartbeat(f"{ip}:{message.port}")
+        #     cp.count_heartbeat_ACKS(f"{ip}:{message.port}")
+            if (holdback_queue):
+                for message in holdback_queue:
+                    if (message.data == R_q+1):
+                        delivery_queue.append(message)
+                        Rq = Rq+1
+                        holdback_queue.remove(message)
+        if (Sp > Rq+1):
+            holdback_queue.append(message)
+            #logging.debug(f"holdback_queue {holdback_queue[0].data}")
+        if Sp <= Rq:
+            pass
+        for message in delivery_queue:
+            logging.debug(f"delivery_queue {delivery_queue[0].data}")
+            delivery_queue.remove(message)
+            Message(opcode=OpCode.HEARTBEAT_ACK, port=cp.node.port, data=Rq).send(ip, message.port,10)
+            
+    # if local_socket in message.data['received']:
+    #     if local_socket in cp._node_heartbeats_received:
+    #         if cp._node_heartbeats_received[local_socket] > message.data['received'][local_socket]:
+    #             #logging.debug(f"{cp._node_heartbeats_received}  {message.data['received']}")
+    #             Message(opcode=OpCode.HEARTBEAT_NEG_ACK, port=cp.node.port, data=Rq).send(ip, message.port)
+
 
 def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election, app_state: ApplicationState):
     try:
@@ -167,7 +203,7 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election,
             for socket, hb in cp._node_heartbeats.items():
                 node = cp.get_node_from_socket(socket)
 
-                if hb + 2 < int(time.time()):
+                if hb + 100 < int(time.time()):
                     cp.remove_node(node)
                     logging.info(f"Lost connection to node: {node.ip}:{node.port}")
                     new_hb_dict.pop(socket)
@@ -182,8 +218,16 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election,
                         e = Election(cp)
                         e.initiate_election()
 
-            Message(opcode=OpCode.HEARTBEAT, port=cp.node.port).broadcast()
+            transport = {
+                    'sent': cp._node_heartbeats_sent, 
+                    'received': cp._node_heartbeats_received
+            }
+
+            Message(opcode=OpCode.HEARTBEAT, data=transport, port=cp.node.port).broadcast(10)
             cp.register_heartbeat(f"{cp.node.ip}:{cp.node.port}")
+            cp.count_heartbeats_sent(f"{cp.node.ip}:{cp.node.port}")
+            # for node in cp.nodes:
+            #     Message(opcode=OpCode.HEARTBEAT, data=transport, port=cp.node.port).send(node.ip, node.port)
 
             time.sleep(delay)
 
@@ -219,6 +263,10 @@ def message_handler(message: Message, ip: str, cp: ControlPlane, election: Elect
         hello_reply_handler(message, ip, cp, election)
     elif message.opcode is OpCode.HEARTBEAT:
         heartbeat_handler(message, ip, cp, election)
+    elif message.opcode is OpCode.HEARTBEAT_ACK:
+        heartbeat_ack_handler(message, ip, cp, election)
+    elif message.opcode is OpCode.HEARTBEAT_NEG_ACK:
+        heartbeat_neg_ack_handler(message, ip, cp, election)
     elif (
         message.opcode is OpCode.ELECTION_VOTE
         or message.opcode is OpCode.ELECTION_REPLY
