@@ -8,6 +8,8 @@ class ControlPlane:
         self._node: Node = None
         self._nodes: set[Node] = set()
         self._node_heartbeats = {}
+        self._node_heartbeats_sent = {}
+        self._node_heartbeats_received = {}
         self.current_leader: Node = None
 
     @property
@@ -16,6 +18,15 @@ class ControlPlane:
 
     def register_heartbeat(self, socket: str):
         self._node_heartbeats[socket] = int(time.time())
+
+    def count_heartbeats_sent(self, socket: str):
+        if socket in self._node_heartbeats:
+            if socket in self._node_heartbeats_sent:
+                self._node_heartbeats_sent[socket] += 1
+                self._node_heartbeats_received[socket] += 1
+            else:
+                self._node_heartbeats_sent[socket] = 1
+                self._node_heartbeats_received[socket] = 1
 
     @nodes.setter
     def nodes(self, new_nodes: set[Node]):

@@ -24,7 +24,7 @@ def find_available_port(start_port, max_attempts=10):
 def main():
     parser = argparse.ArgumentParser(prog="Server")
 
-    parser.add_argument("--port", default=8765, type=int)
+    parser.add_argument("--port", default=9765, type=int)
     parser.add_argument("--delay", default=1, type=int)
     parser.add_argument("--loglevel", default="INFO", type=str)
 

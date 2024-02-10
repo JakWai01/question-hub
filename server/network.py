@@ -41,6 +41,8 @@ class OpCode(str, Enum):
     HELLO_SERVER = "hello_server"
     HELLO_REPLY = "hello_reply"
     HEARTBEAT = "heartbeat"
+    HEARTBEAT_ACK = "heartbeat_ack"
+    HEARTBEAT_NEG_ACK = "heartbeat_neg_ack"
     ELECTION_VOTE = "election_vote"
     ELECTION_REPLY = "election_reply"
     ELECTION_RESULT = "election_result"
