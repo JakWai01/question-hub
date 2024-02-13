@@ -1,6 +1,6 @@
 from network import Message, OpCode
 import socket
-from network import INTERFACE, BROADCAST_PORT
+from network import INTERFACE, BROADCAST_PORT, MCAST_GRP, MCAST_PORT
 import logging
 from control_plane import ControlPlane
 import time
@@ -10,6 +10,7 @@ import json
 from election import ElectionData
 from application_state import ApplicationState, Question, Vote
 import node
+import struct
 
 class CustomEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -48,7 +49,6 @@ def application_state_handler(message: Message, ip: str, cp: ControlPlane, elect
     app_state.questions = application_state.questions
 
     logging.info("Received application state")
-    # print("RECEIVED APPLICATION STATE")
     print(app_state.__dict__)
 
 # Vote for an existing question. If the leader does not know about the question, the question does not exist. 
@@ -112,7 +112,7 @@ def broadcast_target(callback, cp: ControlPlane, election: Election, app_state: 
             if data:
                 msg = Message.unmarshal(data)
 
-                #logging.debug(f"Broadcast message received: {msg.opcode}")
+                logging.debug(f"Broadcast message received: {msg.opcode}")
 
                 callback(msg, ip, cp, election, app_state)
     except KeyboardInterrupt:
@@ -130,7 +130,7 @@ def unicast_target(callback, lport: int, cp: ControlPlane, election: Election, a
             if data:
                 #print(data)
                 msg = Message.unmarshal(data)
-                #logging.debug(f"Unicast message received: {msg.opcode}")
+                logging.debug(f"Unicast message received: {msg.opcode}")
                 callback(msg, ip, cp, election, app_state)
     except KeyboardInterrupt:
         listen_socket.close()
@@ -209,16 +209,26 @@ def heartbeat_handler(message: Message, ip: str, cp: ControlPlane, election: Ele
 
 
 def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election, app_state: ApplicationState):
+
+    mcast = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    mcast.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    mcast.bind((MCAST_GRP, MCAST_PORT))
+    mreq = struct.pack('5s4s', socket.inet_aton(MCAST_GRP), socket.inet_aton(INTERFACE.ip.compressed))
+
+    mcast.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+
     try:
         while True:
+            data, (ip, port) = mcast.recvfrom(10240)
             new_hb_dict = cp._node_heartbeats.copy()
-            for socket, hb in cp._node_heartbeats.items():
-                node = cp.get_node_from_socket(socket)
+            for ssocket, hb in cp._node_heartbeats.items():
+                node = cp.get_node_from_socket(ssocket)
 
                 if hb + 10 < int(time.time()):
                     cp.remove_node(node)
                     logging.info(f"Lost connection to node: {node.ip}:{node.port}")
-                    new_hb_dict.pop(socket)
+                    new_hb_dict.pop(ssocket)
                     cp._node_heartbeats = new_hb_dict
 
                     if (
@@ -235,9 +245,11 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election,
                     'received': cp._node_heartbeats_received
             }
 
+            Message(opcode=OpCode.HEARTBEAT, data=transport, port=cp.node.port).send(MCAST_GRP, MCAST_PORT)
+            cp.count_heartbeats_sent(f"{cp.node.ip}:{cp.node.port}")
+
             Message(opcode=OpCode.HEARTBEAT, data=transport, port=cp.node.port).broadcast(2)
             cp.register_heartbeat(f"{cp.node.ip}:{cp.node.port}")
-            cp.count_heartbeats_sent(f"{cp.node.ip}:{cp.node.port}")
 
             time.sleep(delay)
 

@@ -7,6 +7,13 @@ import logging
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
+# multicast socket
+MULTICAST_TTL = 20
+MCAST_GRP = "224.1.1.1"
+MCAST_PORT = 11111
+mcast = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+mcast.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, MULTICAST_TTL)
+
 
 def is_valid(address: str, broadcast: str | None):
     if not broadcast:
@@ -92,4 +99,7 @@ def send(payload: bytes, address: tuple[str, int] | None = None, timeout=0):
             f"Sending message of type {msg['opcode']} to {address[0]}:{address[1]}"
         )
 
-    sock.sendto(payload, address)
+    if address is (MCAST_GRP, MCAST_PORT):
+        mcast.sendto(payload, address)
+    else:
+        sock.sendto(payload, address)
