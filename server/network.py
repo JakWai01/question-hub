@@ -4,16 +4,14 @@ import netifaces
 import json
 import socket
 import logging
+import struct
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-# multicast socket
-MULTICAST_TTL = 20
-MCAST_GRP = "224.1.1.1"
-MCAST_PORT = 11111
-mcast = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-mcast.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, MULTICAST_TTL)
-
+mcast = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+# Set the time-to-live for multicast packets
+ttl = struct.pack('b', 1)
+mcast.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
 
 def is_valid(address: str, broadcast: str | None):
     if not broadcast:
@@ -35,6 +33,8 @@ def get_network_interface() -> IPv4Interface:
                 return IPv4Interface(f"{address}/{netmask}")
     raise Exception("Cannot find network interface to listen on")
 
+MCAST_GRP = "224.1.1.1"
+MCAST_PORT = 11111
 
 HOSTNAME = socket.gethostname()
 INTERFACE = get_network_interface()
@@ -75,7 +75,7 @@ class Message:
     def unmarshal(data_b: bytes) -> "Message":
         data_str = data_b.decode("UTF-8")
         payload = json.loads(data_str)
-        logging.debug(f"Unmarshalled payload {payload}")
+        #logging.debug(f"Unmarshalled payload {payload}")
         return Message(
             OpCode(payload.get("opcode")), payload.get("data"), payload.get("port")
         )

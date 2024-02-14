@@ -62,6 +62,9 @@ def main():
     )
     heartbeat_thread.start()
     threads.append(heartbeat_thread)
+    MCAST_GRP = "224.1.1.1"
+    MCAST_PORT = 11111
+    Message(opcode=OpCode.HEARTBEAT, port=cp.node.port).send(MCAST_GRP, MCAST_PORT)
 
     Message(OpCode.HELLO, port=cp.node.port, data=json.dumps(cp.node.__dict__)).broadcast(2)
 
