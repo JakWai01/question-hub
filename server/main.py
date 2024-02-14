@@ -38,6 +38,7 @@ def main():
     cp.node = node.Node(INTERFACE.ip.compressed, args.port, False)
     cp.register_node(cp.node)
     cp.register_heartbeat(f"{cp.node.ip}:{cp.node.port}")
+    cp.count_heartbeats_sent(f"{cp.node.ip}:{cp.node.port}")
 
     election = Election(cp)
 
@@ -64,6 +65,7 @@ def main():
     threads.append(heartbeat_thread)
     MCAST_GRP = "224.1.1.1"
     MCAST_PORT = 11111
+
     Message(opcode=OpCode.HEARTBEAT, port=cp.node.port).send(MCAST_GRP, MCAST_PORT)
 
     Message(OpCode.HELLO, port=cp.node.port, data=json.dumps(cp.node.__dict__)).broadcast(2)
