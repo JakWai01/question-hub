@@ -23,14 +23,12 @@ class ControlPlane:
         if socket in self._node_heartbeats:
             if socket in self._node_heartbeats_sent:
                 self._node_heartbeats_sent[socket] += 1
-                self._node_heartbeats_received[socket] += 1
             else:
                 self._node_heartbeats_sent[socket] = 1
-                self._node_heartbeats_received[socket] = 1
 
     def count_heartbeats_received(self, socket: str):
         if socket in self._node_heartbeats:
-            if socket in self._node_heartbeats_sent:
+            if socket in self._node_heartbeats_received:
                 self._node_heartbeats_received[socket] += 1
             else:
                 self._node_heartbeats_received[socket] = 1
