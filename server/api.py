@@ -138,15 +138,17 @@ def unicast_target(callback, lport: int, cp: ControlPlane, election: Election, a
 def heartbeat_ack_handler(message: Message, ip: str, cp: ControlPlane, election: Election):
     local_socket = f'{cp.node.ip}:{cp.node.port}'
     received_socket = f'{ip}:{message.port}'
-    cp.register_heartbeat(local_socket)
     if local_socket in message.data['received']:
         logging.info(f"ACK {message.data['received'][local_socket]} received from {ip}:{message.port}")
+    cp.register_heartbeat(local_socket)
 
 def heartbeat_neg_ack_handler(message: Message, ip: str, cp: ControlPlane, election: Election):
     local_socket = f'{cp.node.ip}:{cp.node.port}'
     received_socket = f'{ip}:{message.port}'
-    cp.register_heartbeat(local_socket)
     logging.info(f"NEG_ACK {message.data['received'][local_socket]} received from {ip}:{message.port}")
+    if message.data['sent'][local_socket] > cp._node_heartbeats_sent[local_socket]:
+        cp._node_heartbeats_sent[local_socket] = message.data['sent'][local_socket]
+    cp.register_heartbeat(local_socket)
 
 holdback_queue = []
 delivery_queue = []
@@ -154,61 +156,88 @@ def heartbeat_handler(message: Message, ip: str, cp: ControlPlane, election: Ele
 
     local_socket = f'{cp.node.ip}:{cp.node.port}'
     received_socket = f'{ip}:{message.port}'
-    
-    logging.debug(f"local_socket = {local_socket} received_socket = {received_socket}")
-    cp.count_heartbeats_received(local_socket)
 
-    # updating the value of the received messages from the other nodes
+    logging.debug(f"local_socket = {local_socket} received_socket = {received_socket}")
+    logging.debug(f"stored sent {cp._node_heartbeats_sent}")
+    logging.debug(f"stored received {cp._node_heartbeats_received}")
+
+    cp.register_heartbeat(local_socket)
+
     if message.data is not None:
-        logging.debug(f"heartbeats sent {message.data['sent']}, stored {cp._node_heartbeats_sent}")
-        logging.debug(f"heartbeats received: {message.data['received']}, stored: {cp._node_heartbeats_received}")
-        #updating storage
+        # updating the value of the received messages from the other nodes
+        transport = {
+                'from': f"{cp.node.ip}:{cp.node.port}",
+                'sent': cp._node_heartbeats_sent, 
+                'received': cp._node_heartbeats_received,
+                'stamp': cp._node_heartbeats
+        }
         if received_socket in message.data['received']:
-            cp._node_heartbeats_received[received_socket] = message.data['received'][received_socket]
+            if received_socket in cp._node_heartbeats_received:
+                if message.data['received'][received_socket] < cp._node_heartbeats_received[received_socket]:
+                    transport = {
+                            'from': f"{cp.node.ip}:{cp.node.port}",
+                            'sent': cp._node_heartbeats_sent, 
+                            'received': cp._node_heartbeats_received,
+                            'stamp': cp._node_heartbeats
+                    }
+                    Message(opcode=OpCode.HEARTBEAT_NEG_ACK, data=transport, port=cp.node.port).send(ip, message.port)
+                    logging.info(f"NEG_ACK for {message.data['received'][received_socket]} sent to {ip}:{message.port}")
+        if local_socket in message.data['stamp']:
+            if cp._node_heartbeats[local_socket] <= message.data['stamp'][local_socket]:
+                if local_socket in message.data['received']:
+                    cp._node_heartbeats_received[local_socket] = message.data['received'][local_socket]
+                if local_socket in message.data['sent']:
+                    if message.data['sent'][local_socket] > cp._node_heartbeats_sent[local_socket]:
+                        cp._node_heartbeats_sent[local_socket] = message.data['sent'][local_socket]
+            if received_socket in cp._node_heartbeats:
+                if cp._node_heartbeats[received_socket] <= message.data['stamp'][received_socket]:
+                    if received_socket in message.data['received']:
+                        cp._node_heartbeats_received[received_socket] = message.data['received'][received_socket]
+                    if received_socket in message.data['sent']:
+                        cp._node_heartbeats_sent[received_socket] = message.data['sent'][received_socket]
 
         transport = {
-                'address': f"{cp.node.ip}:{cp.node.port}",
+                'from': f"{cp.node.ip}:{cp.node.port}",
                 'sent': cp._node_heartbeats_sent, 
-                'received': cp._node_heartbeats_received
+                'received': cp._node_heartbeats_received,
+                'stamp': cp._node_heartbeats
         }
-        
-        if received_socket in message.data['received'] and received_socket in cp._node_heartbeats_received:
-            #for each s in <s,R> 
-            for socket in message.data['received']:
-                if socket is not local_socket:
-                    #if (R > Rs)
-                    if message.data['received'][socket] > cp._node_heartbeats_received[socket]:
-                        Message(opcode=OpCode.HEARTBEAT_NEG_ACK, data=transport, port=cp.node.port).send(ip, message.port)
-                        logging.info(f"NEG_ACK for {message.data['received'][socket]} sent to {ip}:{message.port}")
 
+        logging.debug(f"message received {message.data['received']}, sent {message.data['sent']}")
 
-        if local_socket in message.data['received']:
-            Sp = cp._node_heartbeats_sent[local_socket]
-            Rq = message.data['received'][local_socket]
-            logging.debug(f"{local_socket}: Sp = {Sp} Rq = {Rq}")
-            #if (Sp == Rq+1)
+        Sp = cp._node_heartbeats_sent[local_socket]
+        if local_socket in cp._node_heartbeats_received:
+            Rq = cp._node_heartbeats_received[local_socket]
+        else:
+            Rq = 1
+        logging.debug(f"{local_socket}: Sp = {Sp} Rq = {Rq}")
+        while True:
             if (Sp == Rq+1):
-                if (holdback_queue):
-                    for message in holdback_queue:
-                        if (message.data == Rq+1):
-                            delivery_queue.append(message)
-                            Rq = Rq+1
-                            holdback_queue.remove(message)
                 delivery_queue.append(message)
-                Rq = Rq+1
                 for message in delivery_queue:
-                    logging.debug(f"delivery_queue ready for sending {delivery_queue[0].data}")
                     cp.register_heartbeat(received_socket)
                     delivery_queue.remove(message)
+                    transport = {
+                            'from': f"{cp.node.ip}:{cp.node.port}",
+                            'sent': cp._node_heartbeats_sent, 
+                            'received': cp._node_heartbeats_received,
+                            'stamp': cp._node_heartbeats
+                    }
                     Message(opcode=OpCode.HEARTBEAT_ACK, data=transport, port=cp.node.port).send(ip, message.port)
-                    logging.info(f"ACK for {cp._node_heartbeats_received[received_socket]} sent to {ip}:{message.port}")
-            #if (Sp > Rq+1)
+                cp.count_heartbeats_received(local_socket)
+                Rq = cp._node_heartbeats_received[local_socket]
+                break
+            else:
+                logging.debug(f"{local_socket}: Sp = {Sp} Rq = {Rq}")
+            if (holdback_queue):
+                for message in holdback_queue:
+                    delivery_queue.append(message)
+                    cp.count_heartbeats_received(local_socket)
+                    Rq = cp._node_heartbeats_received[local_socket]
+                    holdback_queue.remove(message)
             if (Sp > Rq+1):
                 holdback_queue.append(message)
                 logging.debug(f"holdback_queue {holdback_queue[0].data}")
-                logging.debug(f"delivery_queue {delivery_queue}")
-                return
-            #if (Sp < Rq)
             if Sp <= Rq:
                 return
 
@@ -239,12 +268,7 @@ def multicast_target(callback, cp: ControlPlane, election: Election, app_state: 
             if data:
                 msg = Message.unmarshal(data)
                 if ip == cp.node.ip and msg.port == cp.node.port:
-                    #logging.debug(f"Dropped heartbeart message received: {msg.opcode} from {ip}:{msg.port}")
                     continue
-            if data:
-                msg = Message.unmarshal(data)
-
-                #logging.debug(f"Heartbeat message received: {msg.opcode} from {ip} {msg.port}")
 
                 callback(msg, ip, cp, election, app_state)
 
@@ -255,17 +279,19 @@ def multicast_target(callback, cp: ControlPlane, election: Election, app_state: 
 
 def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election, app_state: ApplicationState):
 
+    local_socket = f'{cp.node.ip}:{cp.node.port}'
+
     try:
         while True:
             new_hb_dict = cp._node_heartbeats.copy()
 
-            for ssocket, hb in cp._node_heartbeats.items():
-                node = cp.get_node_from_socket(ssocket)
+            for socket, hb in cp._node_heartbeats.items():
+                node = cp.get_node_from_socket(socket)
 
-                if hb + 100 < int(time.time()):
+                if hb + 10 < int(time.time()):
                     cp.remove_node(node)
                     logging.info(f"Lost connection to node: {node.ip}:{node.port}")
-                    new_hb_dict.pop(ssocket)
+                    new_hb_dict.pop(socket)
                     cp._node_heartbeats = new_hb_dict
 
                     if (
@@ -277,11 +303,12 @@ def heartbeat_target(callback, delay: int, cp: ControlPlane, election: Election,
                         e = Election(cp)
                         e.initiate_election()
 
-            cp.count_heartbeats_sent(f"{cp.node.ip}:{cp.node.port}")
+            cp.count_heartbeats_sent(local_socket)
             transport = {
-                    'address': f"{cp.node.ip}:{cp.node.port}",
+                    'from': f"{cp.node.ip}:{cp.node.port}",
                     'sent': cp._node_heartbeats_sent, 
-                    'received': cp._node_heartbeats_received
+                    'received': cp._node_heartbeats_received,
+                    'stamp': cp._node_heartbeats
             }
 
             Message(opcode=OpCode.HEARTBEAT, data=transport, port=cp.node.port).send(MCAST_GRP, MCAST_PORT)
